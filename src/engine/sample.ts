@@ -53,16 +53,19 @@ function rng(seed: number) {
   return () => { s = (s + 0x6d2b79f5) >>> 0; let t = s; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296 }
 }
 
-const GOOD_WEB = ['cloudops-journal', 'devweekly', 'saasbrief', 'cfo-insider', 'techledger', 'datacenter-dive', 'infraweekly', 'securityreview', 'buildersnotes', 'stackreader', 'productpulse', 'growthdesk', 'revopsreport', 'itleaders', 'thecloudpost', 'engineeringdaily', 'opsquarterly', 'b2bmarketer', 'finance-times-ish', 'cxomonthly', 'startupgazette', 'analyticsbeat', 'developertimes', 'networkworld-ish', 'clouddigest', 'mlreview', 'workplacetech', 'hrtechnews', 'smbadvisor', 'venturewire', 'citywire-news', 'morningledger', 'thedatabrief', 'remotework-hq', 'salesopsdaily', 'digitalcfo', 'automation-today', 'platformnews', 'bizjournalist', 'theopsletter', 'saasmetrics', 'cloudnative-news', 'techboardroom', 'enterpriseweek', 'apiweekly', 'kubeletter', 'devsecops-news', 'outsideweather', 'dailyrecipes', 'hometheory', 'sportsfinal', 'localnews-metro', 'healthwise', 'travelnotes', 'parentingpost', 'scienceline', 'autoreview', 'gardenweekly', 'moneysense-ish', 'carefulshopper']
+const GOOD_WEB = ['cloudops-journal', 'devweekly', 'saasbrief', 'cfo-insider', 'techledger', 'datacenter-dive', 'infraweekly', 'securityreview', 'buildersnotes', 'stackreader', 'productpulse', 'growthdesk', 'revopsreport', 'itleaders', 'thecloudpost', 'engineeringdaily', 'opsquarterly', 'b2bmarketer', 'financeledger', 'cxomonthly', 'startupgazette', 'analyticsbeat', 'developertimes', 'netopsworld', 'clouddigest', 'mlreview', 'workplacetech', 'hrtechnews', 'smbadvisor', 'venturewire', 'citywire-news', 'morningledger', 'thedatabrief', 'remotework-hq', 'salesopsdaily', 'digitalcfo', 'automation-today', 'platformnews', 'bizjournalist', 'theopsletter', 'saasmetrics', 'cloudnative-news', 'techboardroom', 'enterpriseweek', 'apiweekly', 'kubeletter', 'devsecops-news', 'outsideweather', 'dailyrecipes', 'hometheory', 'sportsfinal', 'localnews-metro', 'healthwise', 'travelnotes', 'parentingpost', 'scienceline', 'autoreview', 'gardenweekly', 'moneycompass', 'carefulshopper']
 const JUNK_WEB = ['top-10-celeb-photos-daily', 'you-wont-believe-these-pics', 'amazing-facts-slideshow-hub', 'trivia-quiz-zone-daily', 'viral-buzz-gallery', 'shocking-before-after-photos', 'daily-tips-and-life-hacks', 'celebs-then-and-now-gallery', 'top-50-things-you-missed', 'unbelievable-pics-today', 'the-best-recipes-daily-slides', 'quiz-time-trivia-world', 'xkqzv7381-news', 'brtnmlx', 'trendin-now-photos', 'fact-finder-slideshow', 'buzz-worthy-gallery-now', 'health-tips-slideshow-daily', 'money-hacks-top-20-list', 'pet-pics-gallery-daily', 'travel-photos-you-must-see', 'home-hacks-top-25-list', 'retro-celeb-gallery-hub', 'zqw88412media', 'dailyfeedhub', 'newsfeed-aggregate-247', 'quick-quiz-play-now', 'gallery-of-the-day', 'insane-facts-top-100', 'auto-pics-slideshow-hub', 'kwrtpxl', 'sports-bloopers-gallery', 'house-flip-photos-daily', 'mom-hacks-list-of-30', 'garden-tips-gallery-daily', 'weird-history-photos-hub', 'tech-gadget-gallery-10', 'diet-hacks-top-15-list', 'royal-family-photo-gallery', 'old-movies-trivia-quiz']
-const GOOD_CTV = ['ctv:northlight-tv', 'ctv:cinemaplex-channel', 'ctv:newsnow-live', 'ctv:sportsdesk-tv', 'ctv:homeandgarden-tv', 'ctv:kidszone-channel', 'ctv:docuverse', 'ctv:foodnetwork-ish', 'ctv:comedycellar-tv', 'ctv:outdoors-channel', 'roku:418822', 'roku:503311', 'roku:611207', 'roku:702955', 'roku:388104', 'ctv:streamhub-movies', 'ctv:musicbox-live', 'ctv:classic-tv-plus', 'ctv:weather-now', 'ctv:anime-stream-x']
+// Junk that ran in the baseline period only: excluded after the first audit, so it shows as resolved.
+const EXCLUDED_WEB = ['celebrity-net-worth-gallery-hub', 'top-30-cars-slideshow', 'xqzpt4471-daily', 'lottery-luck-quiz-time', 'zodiac-trivia-slides', 'brvxtqm', 'nostalgia-pics-gallery-90s', 'hollywood-then-now-slides', 'puzzle-quiz-daily-win', 'tiny-house-photos-gallery', 'wild-animal-pics-top-40', 'fails-of-the-week-gallery']
+const EXCLUDED_APP = ['com.example.ramboosterfree', 'id1900000777', 'com.example.coloringtapgame']
+const GOOD_CTV = ['ctv:northlight-tv', 'ctv:cinemaplex-channel', 'ctv:newsnow-live', 'ctv:sportsdesk-tv', 'ctv:homeandgarden-tv', 'ctv:kidszone-channel', 'ctv:docuverse', 'ctv:kitchen-channel', 'ctv:comedycellar-tv', 'ctv:outdoors-channel', 'roku:418822', 'roku:503311', 'roku:611207', 'roku:702955', 'roku:388104', 'ctv:streamhub-movies', 'ctv:musicbox-live', 'ctv:classic-tv-plus', 'ctv:weather-now', 'ctv:anime-stream-x']
 const JUNK_CTV = ['roku:990417', 'roku:990522', 'ctv:screensaver-fireplace', 'ctv:aquarium-4k-loop', 'roku:991184', 'ctv:free-movies-247-loop', 'ctv:radio-visualizer']
 const GOOD_APP = ['com.example.newsreader', 'com.example.weatherpro', 'com.example.recipebox', 'com.example.fitnesscoach', 'id1900000101', 'id1900000117', 'com.example.podcastplayer', 'com.example.sudokuclassic', 'com.example.transitmaps', 'id1900000142', 'com.example.bookclub', 'com.example.chesspro']
 const JUNK_APP = ['com.example.flashlightultra', 'com.example.junkcleanerboost', 'com.example.batterysaverpro', 'id1900000966', 'com.example.wallpaperhd4k', 'com.example.qrscannerfree', 'com.example.vpnfastfree', 'id1900000981']
 
 const tld = (s: string) => (s.includes(':') || s.startsWith('com.') || /^id\d/.test(s) ? s : s + '.example')
 
-export function generate(def: SampleDef, opts: { from?: string; to?: string; junkShare?: number; seed?: number } = {}): Dataset {
+export function generate(def: SampleDef, opts: { from?: string; to?: string; junkShare?: number; seed?: number; baseline?: boolean } = {}): Dataset {
   const r = rng(opts.seed ?? def.seed)
   const from = opts.from ?? def.from, to = opts.to ?? def.to
   const junkShare = opts.junkShare ?? def.junkShare
@@ -70,7 +73,11 @@ export function generate(def: SampleDef, opts: { from?: string; to?: string; jun
   for (let d = dayNum(from); d <= dayNum(to); d++) days.push(dayStr(d))
   const pick = <T,>(xs: T[], n: number) => xs.slice(0, n)
   const good = def.kind === 'ctv' ? [...GOOD_CTV, ...GOOD_APP] : pick(GOOD_WEB, def.kind === 'native' ? 60 : 48).concat(def.kind === 'display' ? GOOD_APP.slice(0, 6) : [])
-  const junk = def.kind === 'ctv' ? [...JUNK_CTV, ...JUNK_APP] : pick(JUNK_WEB, def.kind === 'native' ? 40 : 28).concat(def.kind === 'display' ? JUNK_APP.slice(0, 4) : [])
+  let junk = def.kind === 'ctv' ? [...JUNK_CTV, ...JUNK_APP] : pick(JUNK_WEB, def.kind === 'native' ? 40 : 28).concat(def.kind === 'display' ? JUNK_APP.slice(0, 4) : [])
+  if (opts.baseline) {
+    const gone = def.kind === 'ctv' ? EXCLUDED_APP : EXCLUDED_WEB
+    junk = [...gone, ...junk.slice(0, junk.length - Math.ceil(gone.length / 2))]
+  }
   const zipf = (n: number) => Array.from({ length: n }, (_, i) => 1 / Math.pow(i + 1.5, 0.95) * (0.7 + 0.6 * r()))
   const gw = zipf(good.length), jw = zipf(junk.length).map(w => Math.pow(w, 0.4)) // junk is a flatter long tail
   const gs = gw.reduce((a, b) => a + b, 0), js = jw.reduce((a, b) => a + b, 0)
@@ -150,7 +157,7 @@ export function sampleHistory(def: SampleDef, id: () => string): Snapshot[] {
   const len = dayNum(def.to) - dayNum(def.from) + 1
   const prevTo = dayStr(dayNum(def.from) - 1)
   const prevFrom = dayStr(dayNum(def.from) - Math.max(7, Math.min(14, len)))
-  const ds = generate(def, { from: prevFrom, to: prevTo, junkShare: Math.min(0.45, def.junkShare * 1.45), seed: def.seed + 100 })
+  const ds = generate(def, { from: prevFrom, to: prevTo, junkShare: Math.min(0.45, def.junkShare * 1.45), seed: def.seed + 100, baseline: true })
   const a = runAudit(ds, sampleConfig(def))
   return [snapshotOf(a, id(), `Baseline ${prevFrom.slice(5)} to ${prevTo.slice(5)}`, Date.parse(prevTo + 'T18:00:00Z'))]
 }

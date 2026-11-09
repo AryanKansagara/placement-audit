@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { runAudit, type Audit } from './engine/audit.ts'
+import { snapshotOf } from './engine/exports.ts'
 import { pacing } from './engine/pacing.ts'
 import { generate, SAMPLES, sampleConfig, sampleHistory } from './engine/sample.ts'
 import { EMPTY_DATASET, type Config, type Dataset } from './engine/types.ts'
@@ -19,7 +20,8 @@ export async function createSampleProject(sampleId: string): Promise<Project> {
   const def = SAMPLES.find(s => s.id === sampleId)!
   const ds = sampleDataset(sampleId)!
   const now = Date.now()
-  const snapshots = sampleHistory(def, uuid)
+  // Baseline (before exclusions) plus the current period, so the compare view has a story to tell.
+  const snapshots = [...sampleHistory(def, uuid), snapshotOf(runAudit(ds, sampleConfig(def)), uuid(), `${def.from.slice(5)} to ${def.to.slice(5)}`, Date.parse(def.to + 'T18:00:00Z'))]
   return saveProject({
     id: uuid(), name: def.name, createdAt: now, updatedAt: now, config: sampleConfig(def), snapshots, sampleId,
     imports: [
@@ -29,6 +31,8 @@ export async function createSampleProject(sampleId: string): Promise<Project> {
     ],
     changelog: [
       { at: snapshots[0].at, action: 'Baseline audit saved', detail: snapshots[0].label },
+      { at: snapshots[0].at + 3600_000, action: 'Exported StackAdapt exclusion list', detail: `${snapshots[0].flaggedCount} placements` },
+      { at: snapshots[1].at, action: 'Snapshot saved', detail: snapshots[1].label },
       { at: now, action: 'Opened the synthetic sample', detail: def.name },
     ],
   })
