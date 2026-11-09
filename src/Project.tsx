@@ -272,7 +272,7 @@ function Overview({ project, audit, pace, openPlacement, onTab }: TabProps & { o
                 <div key={k} className="kind-bar">
                   <div className="row between"><strong>{KIND_LABEL[k]}</strong><span className="small muted">{b.count} placements · {fmtUsd(b.spend)}</span></div>
                   <div className="bar"><span className="clean" style={{ width: `${(b.spend - b.atRisk) / t.spend * 100}%` }} /><span className="risk" style={{ width: `${b.atRisk / t.spend * 100}%` }} /></div>
-                  <small className="muted">{fmtUsd(b.atRisk)} at risk ({fmtPct(b.spend ? b.atRisk / b.spend : 0)} of {KIND_LABEL[k].toLowerCase()} spend)</small>
+                  <small className="muted">{fmtUsd(b.atRisk)} at risk ({fmtPct(b.spend ? b.atRisk / b.spend : 0)} of {k === "ctv" ? "CTV" : KIND_LABEL[k].toLowerCase()} spend)</small>
                 </div>
               )
             })}
