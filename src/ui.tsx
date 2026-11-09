@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState, useSyncExternalStore, type AnchorHTMLAttributes, type ReactNode } from 'react'
-import { UNASSIGNED, UNMAPPED } from './engine/types.ts'
 import { cloudConfigured, deleteAccount, deleteCloudData, exportAll, signIn, signOut, signUp, syncNow, useSync, type SyncStatus } from './sync.ts'
 
 // ---------- Navigation ----------
@@ -31,21 +30,6 @@ export const fmtMonth = (m: string) => new Date(m + '-01T00:00:00Z').toLocaleDat
 export const fmtDay = (d: string) => new Date(d + 'T00:00:00Z').toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })
 export const signed = (n: number, f: (n: number) => string) => (n > 0 ? '+' : n < 0 ? '−' : '') + f(Math.abs(n))
 
-// ---------- Team colors: fixed order, never by rank ----------
-
-export const SLOTS = 8
-export function teamColors(teams: string[]): (team: string) => string {
-  const order = teams.filter(t => t !== UNMAPPED && t !== UNASSIGNED)
-  return team => {
-    if (team === UNMAPPED) return 'var(--unmapped)'
-    if (team === UNASSIGNED) return 'var(--unassigned)'
-    const i = order.indexOf(team)
-    return i >= 0 && i < SLOTS ? `var(--c${i + 1})` : 'var(--c-other)'
-  }
-}
-
-export const TeamDot = ({ color, hatch }: { color: string; hatch?: boolean }) => <i className={`dot${hatch ? ' hatch' : ''}`} style={{ background: color }} aria-hidden="true" />
-
 // ---------- Theme ----------
 
 export function useDark() {
@@ -73,7 +57,7 @@ export function ThemeToggle() {
   )
 }
 
-export const Monogram = () => <span className="monogram" aria-hidden="true">CB</span>
+export const Monogram = () => <span className="monogram" aria-hidden="true">PA</span>
 
 // ---------- Toasts with undo ----------
 
@@ -239,7 +223,7 @@ function AccountMenu() {
               void run(() => mode === 'in' ? signIn(email, pw) : signUp(email, pw), mode === 'in' ? 'Signed in. Syncing your projects.' : 'Account created. Syncing your projects.')
             }}>
               <h3>{mode === 'in' ? 'Sign in to sync' : 'Create an account'}</h3>
-              <p className="muted small">Optional. Everything works signed out. Signing in syncs projects, rules and snapshots across devices; raw uploads over 1.5 MB stay on this device.</p>
+              <p className="muted small">Optional. Everything works signed out. Signing in syncs audits, overrides, change logs and snapshots across devices; raw reports over 1.5 MB stay on this device.</p>
               {!cloudConfigured && <p className="error small">Sync is not configured for this build.</p>}
               <label className="field"><span>Email</span><input name="email" type="email" required autoComplete="email" /></label>
               <label className="field"><span>Password</span><input name="password" type="password" required minLength={6} autoComplete={mode === 'in' ? 'current-password' : 'new-password'} /></label>
@@ -252,10 +236,10 @@ function AccountMenu() {
               <div><div className="muted small">Signed in as</div><strong className="break">{s.user.email}</strong></div>
               <div className="row gap-sm"><SyncPill />{s.error && <span className="error small">{s.error}</span>}</div>
               <button type="button" className="btn ghost sm block" disabled={busy} onClick={() => void run(syncNow)}>Sync now</button>
-              <button type="button" className="btn ghost sm block" onClick={() => void run(async () => download(`chargeback-export-${new Date().toISOString().slice(0, 10)}.json`, await exportAll()))}>Export all my data (JSON)</button>
+              <button type="button" className="btn ghost sm block" onClick={() => void run(async () => download(`placement-audit-export-${new Date().toISOString().slice(0, 10)}.json`, await exportAll()))}>Export all my data (JSON)</button>
               <button type="button" className="btn ghost sm block" onClick={() => void run(signOut, 'Signed out. Your projects stay on this device.')}>Sign out</button>
               <hr />
-              <button type="button" className="btn danger-ghost sm block" disabled={busy} onClick={async () => { if (await ask('Delete cloud data?', 'Removes every Chargeback project and snapshot from the cloud. Copies on this device are kept.', 'Delete cloud data')) void run(deleteCloudData, 'Cloud data deleted.') }}>Delete my cloud data</button>
+              <button type="button" className="btn danger-ghost sm block" disabled={busy} onClick={async () => { if (await ask('Delete cloud data?', 'Removes every Placement Audit project and snapshot from the cloud. Copies on this device are kept.', 'Delete cloud data')) void run(deleteCloudData, 'Cloud data deleted.') }}>Delete my cloud data</button>
               <button type="button" className="btn danger-ghost sm block" disabled={busy} onClick={async () => { if (await ask('Delete your account?', 'Deletes your account and all cloud data. Projects on this device are kept. This cannot be undone.', 'Delete account')) void run(deleteAccount, 'Account deleted.') }}>Delete my account</button>
               {err && <p className="error small" role="alert">{err}</p>}
             </div>
@@ -273,7 +257,7 @@ export function Header() {
   return (
     <header className="header">
       <div className="header-inner">
-        <Link href="/" className="brand" aria-label="Chargeback home"><Monogram /><span>Chargeback</span></Link>
+        <Link href="/" className="brand" aria-label="Placement Audit home"><Monogram /><span>Placement Audit</span></Link>
         <nav className={`nav${menu ? ' open' : ''}`} aria-label="Main">
           {nav.map(([h, l]) => <Link key={h} href={h} onClick={() => setMenu(false)} aria-current={(h === '/' ? path === '/' : path.startsWith(h)) ? 'page' : undefined}>{l}</Link>)}
         </nav>
@@ -296,22 +280,22 @@ export function Footer() {
   return (
     <footer className="footer">
       <div className="footer-inner">
-        <div className="footer-brand"><Monogram /> <strong>Chargeback</strong></div>
+        <div className="footer-brand"><Monogram /> <strong>Placement Audit</strong></div>
         <nav className="footer-nav" aria-label="Footer"><Link href="/app">Projects</Link><Link href="/docs">Docs</Link><Link href="/settings">Settings</Link></nav>
-        <p>Built by Aryan Kansagara. Independent project, not affiliated with Snowflake.</p>
-        <p className="muted small">Sample accounts are synthetic. Your uploads are processed in your browser and stored on this device unless you sign in to sync.</p>
+        <p>Built by Aryan Kansagara. Independent project, not affiliated with StackAdapt.</p>
+        <p className="muted small">Sample campaigns are synthetic and every domain in them is invented. Your reports are processed in your browser and stored on this device unless you sign in to sync.</p>
       </div>
     </footer>
   )
 }
 
 export function NotFound() {
-  useEffect(() => { document.title = 'Not found · Chargeback' }, [])
+  useEffect(() => { document.title = 'Not found · Placement Audit' }, [])
   return (
     <section className="page narrow center notfound">
       <div className="nf-code" aria-hidden="true">404</div>
-      <h1>No warehouse at this address</h1>
-      <p className="muted">The page you asked for does not exist. Nothing was metered for it, either.</p>
+      <h1>No inventory at this address</h1>
+      <p className="muted">The page you asked for does not exist. No impressions were bought on it, either.</p>
       <div className="row gap center-x"><Link href="/" className="btn ghost">Home</Link><Link href="/app" className="btn primary">Your projects</Link></div>
     </section>
   )
@@ -321,4 +305,4 @@ export function Empty({ title, children, icon }: { title: string; children?: Rea
   return <div className="empty">{icon ?? <div className="empty-icon" aria-hidden="true" />}<h3>{title}</h3>{children}</div>
 }
 
-export const SyntheticBadge = () => <span className="badge synthetic" title="Generated data, not a real account">Synthetic</span>
+export const SyntheticBadge = () => <span className="badge synthetic" title="Generated data, not a real campaign">Synthetic</span>

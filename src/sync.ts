@@ -1,12 +1,12 @@
 // Optional cloud sync. Local-first: everything works signed out; signing in merges projects by id, last write wins.
 import { useSyncExternalStore } from 'react'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import type { Snapshot } from './engine/insights.ts'
+import type { Snapshot } from './engine/exports.ts'
 import { clearTombstones, getData, getProjects, loadProjects, onProjectChange, putData, saveProject, tombstones, type Project } from './store.ts'
 import type { Dataset } from './engine/types.ts'
 
-export const APP_ID = 'chargeback'
-/** Raw uploads above this stay on the device; config, rules and snapshots always sync. */
+export const APP_ID = 'placement-audit'
+/** Raw uploads above this stay on the device; settings, overrides, change log and snapshots always sync. */
 export const RAW_SYNC_LIMIT = 1_500_000
 
 const URL_ = import.meta.env.VITE_SUPABASE_URL as string | undefined
@@ -147,7 +147,7 @@ async function doSync() {
         const { project, dataset } = cp.data
         const hasLocal = !!(await getData(id))
         if (dataset) await putData(id, dataset)
-        await saveProject({ ...project, id, name: cp.name, updatedAt: cloudTime, snapshots: lp?.snapshots ?? [], dataMissing: !project.sampleId && !dataset && !hasLocal }, { touch: false, silent: true })
+        await saveProject({ ...project, changelog: project.changelog ?? [], id, name: cp.name, updatedAt: cloudTime, snapshots: lp?.snapshots ?? [], dataMissing: !project.sampleId && !dataset && !hasLocal }, { touch: false, silent: true })
       }
       // Snapshots: union by id in both directions.
       const now = getProjects().find(p => p.id === id)
@@ -158,7 +158,7 @@ async function doSync() {
         if (e2) throw e2
       }
       const missingDown = cvs.filter(v => !now.snapshots.some(s => s.id === v.id))
-      if (missingDown.length) await saveProject({ ...now, snapshots: [...now.snapshots, ...missingDown].sort((a, b) => a.month.localeCompare(b.month)) }, { touch: false, silent: true })
+      if (missingDown.length) await saveProject({ ...now, snapshots: [...now.snapshots, ...missingDown].sort((a, b) => a.at - b.at) }, { touch: false, silent: true })
     }
     set({ status: 'synced', lastSynced: Date.now() })
   } catch (e) {

@@ -1,11 +1,12 @@
 import { useSyncExternalStore } from 'react'
-import type { Snapshot } from './engine/insights.ts'
-import type { Config, Dataset } from './engine/types.ts'
-import type { Kind } from './engine/csv.ts'
+import type { Snapshot } from './engine/exports.ts'
+import { DEFAULT_CONFIG, type Config, type Dataset } from './engine/types.ts'
+import type { Kind, Source } from './engine/csv.ts'
 
 export interface ImportMeta {
   id: string
-  kind: Kind
+  kind: Kind | 'mfa'
+  source?: Source
   fileName: string
   rows: number
   skipped: number
@@ -20,15 +21,19 @@ export interface Project {
   config: Config
   snapshots: Snapshot[]
   imports: ImportMeta[]
+  /** What was done in this audit and when: exports, overrides, imports, snapshots. */
+  changelog: LogEntry[]
   /** Built-in synthetic account; its data is regenerated instead of stored. */
   sampleId?: string
   /** True when this device has no copy of the raw data (synced from another device). */
   dataMissing?: boolean
 }
 
+export interface LogEntry { at: number; action: string; detail?: string }
+
 // ---------- Tiny IndexedDB wrapper (falls back to memory in private modes) ----------
 
-const DB = 'chargeback'
+const DB = 'placement-audit'
 let dbp: Promise<IDBDatabase | null> | null = null
 function db(): Promise<IDBDatabase | null> {
   return dbp ??= new Promise(res => {
@@ -126,7 +131,7 @@ export const putData = (id: string, ds: Dataset) => idbPut('data', ds, id)
 export const uuid = () => crypto.randomUUID()
 
 // Tombstones keep a project deleted offline from coming back on the next sync.
-const TOMB = 'chargeback.tombstones'
+const TOMB = 'placement-audit.tombstones'
 export const tombstones = (): string[] => { try { return JSON.parse(localStorage.getItem(TOMB) ?? '[]') } catch { return [] } }
 const addTombstone = (id: string) => localStorage.setItem(TOMB, JSON.stringify([...new Set([...tombstones(), id])]))
 const removeTombstone = (id: string) => localStorage.setItem(TOMB, JSON.stringify(tombstones().filter(x => x !== id)))
@@ -134,14 +139,12 @@ export const clearTombstones = (ids: string[]) => localStorage.setItem(TOMB, JSO
 
 // ---------- App defaults (settings page) ----------
 
-export interface Defaults { pricePerCredit: number; idleMethod: Config['idleMethod']; carryHours: number }
-const DEF_KEY = 'chargeback.defaults'
+export type Defaults = Pick<Config, 'threshold' | 'freqCap' | 'minImpressions' | 'minViewability' | 'maxIvt' | 'goal'>
+const DEF_KEY = 'placement-audit.defaults'
 export function getDefaults(): Defaults {
-  try { return { pricePerCredit: 3, idleMethod: 'credits', carryHours: 2, ...JSON.parse(localStorage.getItem(DEF_KEY) ?? '{}') } } catch { return { pricePerCredit: 3, idleMethod: 'credits', carryHours: 2 } }
+  const { overrides: _o, ...base } = DEFAULT_CONFIG
+  try { return { ...base, ...JSON.parse(localStorage.getItem(DEF_KEY) ?? '{}') } } catch { return base }
 }
 export const setDefaults = (d: Defaults) => localStorage.setItem(DEF_KEY, JSON.stringify(d))
 
-export function blankConfig(): Config {
-  const d = getDefaults()
-  return { rules: [], idleMethod: d.idleMethod, pricePerCredit: d.pricePerCredit, owners: {}, budgets: {}, carryHours: d.carryHours }
-}
+export const blankConfig = (): Config => ({ ...getDefaults(), overrides: {} })
