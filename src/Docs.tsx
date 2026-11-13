@@ -36,7 +36,7 @@ const SOURCES: { id: string; name: string; steps: string[]; columns: string; not
     steps: [
       'In the advertiser, open Reports and create a report from the Site List or Inventory template (MyReports).',
       'Choose the campaigns or ad groups and the date range; add Day as a dimension for pacing.',
-      'Keep Site, Impressions, Clicks, Advertiser Cost (USD) and your conversion column (for example All Last Click + View Conversions).',
+      'Keep Site, Impressions, Clicks, Advertiser Cost (USD or Adv Currency) and your conversion column (for example All Last Click + View Conversions).',
       'Schedule or run once, then download the CSV.',
     ],
     columns: 'Site, Ad Group, Campaign, Impressions, Clicks, Advertiser Cost (USD), All Last Click + View Conversions.',
@@ -48,7 +48,7 @@ const SOURCES: { id: string; name: string; steps: string[]; columns: string; not
       'Filter to the advertiser and insertion orders; set the date range.',
       'Dimensions: App/URL, Insertion Order, Line Item, and Date for pacing.',
       'Metrics: Impressions, Clicks, Total Conversions, Revenue (Adv Currency) for spend, and Active View: % Viewable Impressions.',
-      'Run the report and download it as CSV. DV360 adds a summary row and report notes at the bottom; the importer skips them and lists them in the validation report.',
+      'Run the report and download it as CSV. DV360 adds a totals row with blank dimensions and a footer (Report Time:, Date Range:, Group By:, filters) at the bottom; the importer skips both and notes them in the validation report. Dates in YYYY/MM/DD are read as written.',
     ],
     columns: 'App/URL, Line Item, Impressions, Clicks, Total Conversions, Revenue (Adv Currency), Active View: % Viewable Impressions.',
   },
@@ -57,8 +57,8 @@ const SOURCES: { id: string; name: string; steps: string[]; columns: string; not
     steps: [
       'Open Campaigns, then Insights and reports, then When and where ads showed (older accounts: Content, then Where ads showed).',
       'Set the date range and pick the campaigns.',
-      'Use the download icon and choose CSV.',
-      'The file starts with a title line and a date-range line above the header; the importer finds the real header and skips the Total rows at the bottom.',
+      'Use the download icon and choose .csv, Excel .csv or .tsv. Excel .csv is UTF-16LE and tab-separated (Google’s report formats page, support.google.com/adxbuyer/answer/1046475, checked November 2026); the importer decodes it, so there is no need to re-save it.',
+      'The file starts with a title line and a date-range line above the header; the importer finds the real header and skips the Total rows at the bottom. App placements are read from Placement URL (mobileapp::2-<package>), not the app name in Placement.',
     ],
     columns: 'Placement, Placement URL, Type, Campaign, Ad group, Impr., Clicks, Cost, Conversions, Conv. value.',
   },
@@ -88,7 +88,7 @@ export default function Docs() {
 
       <section id="generic">
         <h2>Any other DSP or a spreadsheet</h2>
-        <p>Any CSV (comma, tab or semicolon) with a placement column, impressions and spend works. Everything else is optional and improves the score. Rates may be written as 0.71, 71 or 71%. Currency symbols and thousands separators are fine.</p>
+        <p>Any CSV (comma, tab or semicolon) with a placement column, impressions and spend works. Everything else is optional and improves the score. Rates may be written as 0.71, 71 or 71%. Currency symbols and thousands separators are fine, and so are European numbers (1.234,50) in semicolon-separated files saved by Excel. App placements labelled “App name (com.bundle.id)” are grouped by the bundle.</p>
         <div className="table-wrap">
           <table className="data">
             <thead><tr><th>Field</th><th>Required</th><th>Header names recognised</th></tr></thead>

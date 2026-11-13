@@ -481,7 +481,7 @@ table.data tbody tr:hover { background: var(--bg-2); }
 .onboard-card .row + p { margin-top: 14px; }
 
 /* ---------- Placement Audit ---------- */
-.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.sr { position: absolute; left: 0; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .stack-md > * + * { margin-top: 16px; }
 .good-text { color: var(--good); } .bad-text { color: var(--bad); }
 .hero-bg { position: absolute; inset: 0 0 auto; height: 760px; pointer-events: none; z-index: -1; background:
@@ -660,6 +660,7 @@ table.placements tbody th { max-width: 320px; }
   .mini-stats.five, .mini-stats.four { grid-template-columns: 1fr 1fr; }
   .kpis.three, .kpis { grid-template-columns: 1fr 1fr; }
   .report-doc .table-wrap, .report-doc section { overflow-x: auto; }
+  .report-bar { flex-wrap: wrap; gap: 8px; }
   .search, .search input { width: 100%; min-width: 0; }
   .changelog li { grid-template-columns: 1fr; gap: 2px; }
   .report-doc { padding: 24px 18px; margin: 12px; }
