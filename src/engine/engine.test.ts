@@ -2,7 +2,8 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { domainPattern, normalize } from './domain.ts'
 import { frequencyWaste, median, projectWhatIf, robustZ, runAudit, totalsOf } from './audit.ts'
-import { autoMap, detectKind, detectSource, findHeader, parseCsv, parseList, parseNum, validate } from './csv.ts'
+import { readFileSync } from 'node:fs'
+import { autoMap, decodeBytes, detectKind, detectSource, findHeader, parseCsv, parseList, parseNum, sniffDelimiter, validate } from './csv.ts'
 import { allowlist, blocklist, compare, snapshotOf } from './exports.ts'
 import { pacing } from './pacing.ts'
 import { generate, SAMPLES, sampleConfig, sampleHistory } from './sample.ts'
@@ -266,4 +267,87 @@ test('sample: ROAS campaign projects higher ROAS after exclusions', () => {
   const a = runAudit(generate(def), sampleConfig(def))
   assert.ok(a.totals.roas! > 0)
   assert.ok(a.whatIf.after.roas! > a.whatIf.before.roas!)
+})
+
+// Fixtures mirror the real export layouts (header names, title/footer rows, encodings) with synthetic values.
+const fixture = (name: string) => {
+  const csv = parseCsv(decodeBytes(readFileSync(new URL(`./fixtures/${name}`, import.meta.url))))
+  const header = findHeader(csv.rows)
+  const kind = detectKind(csv.rows[header])!
+  return { csv, header, kind, source: detectSource(csv.rows[header]), v: validate(kind, csv, autoMap(kind, csv.rows[header]), header) }
+}
+
+test('Google Ads "Excel .csv": UTF-16LE, tab-separated, title rows, Total rows, Placement URL preferred', () => {
+  const f = fixture('gads-where-ads-showed-utf16.csv')
+  assert.equal(f.csv.delim, '\t')
+  assert.equal(f.header, 2)
+  assert.equal(f.source, 'gads')
+  assert.equal(f.v.rows.length, 4)
+  assert.equal(f.v.skipped, 2)
+  const keys = (f.v.rows as PlacementRow[]).map(r => normalize(r.placement).key)
+  assert.deepEqual(keys, ['cloudops-journal.example', 'com.example.solitaire', 'id1234567890', 'anonymous.google'])
+  assert.equal((f.v.rows as PlacementRow[])[0].impressions, 12840)
+})
+
+test('DV360: YYYY/MM/DD dates, blank-dimension totals row and the report footer are not read as data', () => {
+  const f = fixture('dv360-app-url.csv')
+  assert.equal(f.source, 'dv360')
+  const rows = f.v.rows as PlacementRow[]
+  assert.equal(rows.length, 4)
+  assert.equal(rows[0].date, '2026-10-01')
+  assert.equal(rows[0].viewability, 0.6812)
+  assert.equal(normalize(rows[2].placement).key, 'com.example.solitaire')
+  assert.equal(f.v.skipped, 1)
+  assert.ok(f.v.issues.some(i => /footer/.test(i.message)))
+  assert.ok(!f.v.issues.some(i => /is empty|not a number/.test(i.message)))
+})
+
+test('The Trade Desk: "(Adv Currency)" cost columns and Click + View conversions map', () => {
+  const f = fixture('ttd-site-report.csv')
+  assert.equal(f.source, 'ttd')
+  const rows = f.v.rows as PlacementRow[]
+  assert.equal(rows.length, 4)
+  assert.equal(rows[0].spend, 412.07)
+  assert.equal(rows[0].conversions, 4)
+  assert.equal(rows[0].line, 'NW | Native | Prospecting')
+  assert.equal(normalize(rows[3].placement).key, 'id1234567890')
+})
+
+test('European semicolon CSV: decimal commas and dot thousands', () => {
+  const f = fixture('eu-semicolon.csv')
+  assert.equal(f.csv.delim, ';')
+  const rows = f.v.rows as PlacementRow[]
+  assert.deepEqual(rows.map(r => r.spend), [152.73, 9.5, 1034.1])
+  assert.deepEqual(rows.map(r => r.impressions), [18402, 1204, 902])
+  assert.deepEqual(rows.map(r => Math.round(r.viewability! * 1000) / 1000), [0.681, 0.55, 0.61])
+})
+
+test('parseNum: separator rules for US and European numbers', () => {
+  assert.equal(parseNum('1,234'), 1234)
+  assert.equal(parseNum('1,234,567.89'), 1234567.89)
+  assert.equal(parseNum('12,5'), 12.5)
+  assert.equal(parseNum('1.234,50 €'), 1234.5)
+  assert.equal(parseNum('1.234', true), 1234)
+  assert.equal(parseNum('1.5', true), 1.5)
+  assert.equal(parseNum('1,234', true), 1.234)
+  assert.equal(parseNum('12.50 USD'), 12.5)
+})
+
+test('sniffDelimiter ignores a title line and commas inside a quoted date range', () => {
+  assert.equal(sniffDelimiter('Report\n"Oct 1, 2026 - Oct 31, 2026"\nA\tB\tC\tD\n1\t2\t3\t4\n'), '\t')
+  assert.equal(sniffDelimiter('a,b;c\n1,2;3'), ',')
+})
+
+test('decodeBytes: UTF-8 with BOM, UTF-16LE with and without BOM', () => {
+  const s = 'Domain,Spend\nexample.com,1\n'
+  assert.equal(parseCsv(decodeBytes(new TextEncoder().encode('﻿' + s))).rows[0][0], 'Domain')
+  const le = new Uint8Array([...s].flatMap(c => [c.charCodeAt(0), 0]))
+  assert.equal(decodeBytes(le), s)
+  assert.equal(decodeBytes(new Uint8Array([0xff, 0xfe, ...le])), s)
+})
+
+test('normalize: "App name (bundle)" labels resolve to the bundle or store id', () => {
+  assert.equal(normalize('Solitaire Classic Example (com.example.solitaire)').key, 'com.example.solitaire')
+  assert.equal(normalize('Puzzle Example (id1234567890)').key, 'id1234567890')
+  assert.equal(normalize('Example News (example.com)').kind, 'web')
 })

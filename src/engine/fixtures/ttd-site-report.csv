@@ -1,0 +1,5 @@
+Date,Advertiser,Campaign,Ad Group,Site,Impressions,Clicks,Advertiser Cost (Adv Currency),Partner Cost (Adv Currency),Total Click + View Conversions
+2026-10-01,Northwind Cloud,NW Q4 Native,NW | Native | Prospecting,devweekly.example,"41,207",36,"$412.07",$350.26,4
+2026-10-01,Northwind Cloud,NW Q4 Native,NW | Native | Prospecting,www.you-wont-believe-these-pics.example,"30,118",402,$69.27,$58.88,0
+2026-10-01,Northwind Cloud,NW Q4 Native,NW | Native | Prospecting,com.example.flashlightultra,"12,004",95,$21.61,$18.37,0
+2026-10-01,Northwind Cloud,NW Q4 Native,NW | Native | Prospecting,1234567890,"3,440",4,$14.10,$11.99,0

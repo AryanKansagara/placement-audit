@@ -632,7 +632,7 @@ table.placements tbody th { max-width: 320px; }
 .report-kpis span { font-size: 11px; color: #6b6f76; text-transform: uppercase; letter-spacing: .04em; font-weight: 600; }
 .report-kpis b { font: 700 18px/1.1 var(--font-head); }
 .report-kpis .bad b { color: #e5294f; } .report-kpis .good b { color: #0a8a5a; }
-.report-table td.small { font-size: 12px; color: #444a52; }
+.report-table td.small { font-size: 12px; color: #444a52; white-space: normal; min-width: 260px; }
 .report-actions { padding-left: 20px; } .report-actions li { margin-bottom: 6px; }
 .method-list { display: grid; gap: 6px; margin: 0; } .method-list dt { font-weight: 700; } .method-list dd { margin: 0 0 4px; color: #444a52; }
 .report-foot { margin-top: 30px; border-top: 1px solid #e2e8ef; padding-top: 10px; }
@@ -658,6 +658,8 @@ table.placements tbody th { max-width: 320px; }
   .hs b { font-size: 22px; }
   .format-grid { grid-template-columns: repeat(2, 1fr); }
   .mini-stats.five, .mini-stats.four { grid-template-columns: 1fr 1fr; }
+  .kpis.three, .kpis { grid-template-columns: 1fr 1fr; }
+  .report-doc .table-wrap, .report-doc section { overflow-x: auto; }
   .search, .search input { width: 100%; min-width: 0; }
   .changelog li { grid-template-columns: 1fr; gap: 2px; }
   .report-doc { padding: 24px 18px; margin: 12px; }

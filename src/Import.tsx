@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from 'react'
-import { autoMap, detectKind, detectSource, findHeader, KINDS, parseCsv, parseList, SOURCES, toCsv, validate, type Kind, type Mapping, type Source } from './engine/csv.ts'
+import { autoMap, decodeBytes, detectKind, detectSource, findHeader, KINDS, parseCsv, parseList, SOURCES, toCsv, validate, type Kind, type Mapping, type Source } from './engine/csv.ts'
 import { normalize } from './engine/domain.ts'
 import { toExportCsv } from './engine/sample.ts'
 import { EMPTY_DATASET, type Dataset, type FlightLine, type FreqBucket, type PlacementRow } from './engine/types.ts'
@@ -26,7 +26,7 @@ export default function DataTab({ project, ds, update, reload }: { project: Proj
     for (const f of [...files]) {
       if (f.size > 150_000_000) { toast(`${f.name} is over 150 MB. Export by week, or without the date breakdown.`, { tone: 'error' }); continue }
       if (/\.xlsx?$/i.test(f.name)) { toast(`${f.name} is a spreadsheet. Save it as CSV first (File, Save as, CSV).`, { tone: 'error' }); continue }
-      const text = await f.text()
+      const text = decodeBytes(await f.arrayBuffer())
       await new Promise(r => setTimeout(r, 0))
       const csv = parseCsv(text)
       if (csv.rows.length < 2) { toast(`${f.name} has no data rows.`, { tone: 'error' }); continue }
@@ -129,7 +129,7 @@ export default function DataTab({ project, ds, update, reload }: { project: Proj
         <textarea className="list-input" rows={4} value={listText} onChange={e => setListText(e.target.value)} placeholder={'junk-slideshow-site.example\ncom.example.flashlightapp\n# comments are ignored'} aria-label="Known-MFA list" />
         <div className="row gap-sm wrap">
           <button type="button" className="btn primary sm" disabled={!listText.trim()} onClick={() => void addList(listText, 'Pasted list')}>Add to list</button>
-          <label className="btn ghost sm">Upload list<input type="file" accept=".txt,.csv" hidden onChange={async e => { const f = e.target.files?.[0]; if (f) void addList(await f.text(), f.name); e.target.value = '' }} /></label>
+          <label className="btn ghost sm">Upload list<input type="file" accept=".txt,.csv" hidden onChange={async e => { const f = e.target.files?.[0]; if (f) void addList(decodeBytes(await f.arrayBuffer()), f.name); e.target.value = '' }} /></label>
           {data.knownMfa.length > 0 && !project.sampleId && <button type="button" className="btn danger-ghost sm" onClick={async () => { const prev = data; await putData(project.id, { ...data, knownMfa: [] }); void logChange(project.id, 'Cleared known-MFA list'); reload(); toast('Known-MFA list cleared', { undo: () => void putData(project.id, prev).then(reload) }) }}>Clear list ({data.knownMfa.length})</button>}
         </div>
       </div>

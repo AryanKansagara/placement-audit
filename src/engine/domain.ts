@@ -36,6 +36,9 @@ export function normalize(raw: string): Normalized {
   // CTV markers some exports prefix: "ctv:", "roku:"
   const c = s.match(/^(ctv|roku|firetv|tvos|samsung|lg|vizio)[:/](.+)$/)
   if (c) return c[1] === 'roku' ? { key: 'roku:' + c[2].trim(), kind: 'ctv', store: 'roku' } : { key: c[2].trim(), kind: 'ctv', store: 'ctv' }
+  // "App name (com.bundle.id)" or "App name (id123456789)" as some app reports label them
+  const named = s.match(/\(\s*((?:id)?\d{9,10}|[a-z][\w-]*(?:\.[\w-]+){2,})\s*\)$/)
+  if (named && !s.startsWith('(')) return normalize(named[1])
   if (/^id\d{6,12}$/.test(s)) return { key: s, kind: 'app', store: 'ios' }
   if (/^\d{9,10}$/.test(s)) return { key: 'id' + s, kind: 'app', store: 'ios' }
   if (/^\d{4,8}$/.test(s)) return { key: 'roku:' + s, kind: 'ctv', store: 'roku' }
