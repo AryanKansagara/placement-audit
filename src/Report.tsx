@@ -86,7 +86,7 @@ export default function Report({ id }: { id: string }) {
           <p className="small">Placements are grouped by registrable domain or app ID. Each one earns points from the signals below; statistical signals need at least {fmtNum(project.config.minImpressions)} impressions. The projection assumes moved budget converts at the median rate of clean placements ({(w.cleanConvPerDollar * 1000).toFixed(2)} conversions per $1,000), which is an estimate, not a guarantee.</p>
           <dl className="method-list small">{Object.entries(SIGNALS).filter(([k]) => k !== 'manual').map(([k, s]) => <div key={k}><dt>{s.label} <span className="muted">(up to {s.max})</span></dt><dd>{s.help}</dd></div>)}</dl>
         </section>
-        <footer className="report-foot small muted">Prepared with Placement Audit. Independent tool, not affiliated with any DSP.</footer>
+        <footer className="report-foot small muted">Prepared with Placement Audit.</footer>
       </article>
     </div>
   )
