@@ -87,3 +87,18 @@ test('a row with more values than headers is refused; empty trailing cells are n
   assert.equal(v.skipped, 1)
   assert.deepEqual(v.issues, [{ line: 3, message: 'Row has 4 values for 3 columns, so it was not read. A number such as 1,234 may need quotes' }])
 })
+
+test('totals rows are skipped in every wording', () => {
+  for (const label of ['Total', 'totals', 'Grand Total', 'Total: account', 'Total: Display Network', 'Total - Campaigns', 'Totals (25 rows)', 'Total for all placements', 'Summary', 'Summary:', 'Total Display']) {
+    assert.deepEqual(read(`domain,impressions,spend\na.example,1000,10\n${label},1000,10\n`).rows.map(r => r.placement), ['a.example'], label)
+    for (const blank of ['', '--', 'All']) assert.deepEqual(read(`campaign,domain,impressions,spend\nC,a.example,1000,10\n${label},${blank},1000,10\nC,z.example,1,1\n`).rows.map(r => r.placement), ['a.example', 'z.example'], `${label} ${blank}`)
+  }
+})
+
+test('names that start with "Total" or "Summary" are delivery', () => {
+  const t = 'campaign,domain,impressions,spend\nTotal Wellness Q4,a.example,10,1\nSummary Sale,com.example.game,10,1\nBrand,total-home.example,10,1\nBrand,total.com,10,1\nBrand,https://summary.example/x,10,1\nTotal - TV,id1234567890,10,1\nBrand,Total Battle (com.example.battle),10,1\n'
+  assert.equal(read(t).rows.length, 7)
+  assert.deepEqual(read(t).issues, [])
+  const f = read('line item,budget,start date,end date\nTotal TV,100,2026-11-01,2026-11-30\nTotal,100,2026-11-01,2026-11-30\nTotal budget,100,,\n')
+  assert.equal(f.rows.length, 1)
+})

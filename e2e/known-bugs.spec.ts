@@ -40,7 +40,7 @@ test.fail('#5 bundles that end like a domain stay apps; language subdomains stay
   expect(await keys(page)).toEqual(['com.weather.app', 'example.be'])
 })
 
-test.fail('#6 campaigns and sites that start with "Total" are kept', async ({ page }) => {
+test('#6 campaigns and sites that start with "Total" are kept', async ({ page }) => {
   await newAudit(page)
   await choose(page, { name: 'r.csv', text: 'campaign,domain,impressions,spend\nTotal Wellness Q4,a.example,1000,10\nBrand,total-home.example,1000,10\nBrand,z.example,1000,10\nTotal,,3000,30\n' })
   await expect(card(page, 'r.csv').locator('.report')).toContainText('3 rows ready, 1 skipped', { timeout: 3000 })

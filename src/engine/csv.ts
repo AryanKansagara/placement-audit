@@ -1,3 +1,4 @@
+import { normalize } from './domain.ts'
 import type { FlightLine, FreqBucket, PlacementRow } from './types.ts'
 
 
@@ -314,7 +315,21 @@ function columns(fields: FieldSpec[], rows: string[][], map: Mapping, header: nu
   return out
 }
 
-const TOTAL_ROW = /^(total|totals|grand total|summary)\b/i
+const TOTAL_WORD = /^(total|totals|grand total|summary)\b/i
+/** Wording only a totals row has: "Total", "Total: account", "Totals (25 rows)", "Total - Campaigns", "Total for ...". */
+const TOTAL_LABEL = /^((grand )?totals?|summary)\s*($|[:(]|[-\u2013\u2014]\s|\s[-\u2013\u2014]|\s(for|of|all|rows?)\b)/i
+
+/** Grand-total rows repeat the spend of the rows above. A campaign, line or site merely named "Total ..." does not. */
+function isTotals(kind: Kind, rec: string[], first: string): boolean {
+  const lead = (rec[0] ?? '').trim()
+  if (/^((grand )?totals?|summary):?$/i.test(lead)) return true
+  // A real domain, app ID or bundle is delivery, whatever its campaign is called.
+  if (kind === 'placements' && (/^\S+\.[^\s.]+$/.test(first) || normalize(first).kind !== 'web')) return false
+  if (TOTAL_LABEL.test(first) || TOTAL_LABEL.test(lead)) return true
+  // Other placement text starting with the word still reads as a totals label.
+  if (kind === 'placements') return TOTAL_WORD.test(first) || TOTAL_WORD.test(lead)
+  return false
+}
 
 /** Turns raw records into typed rows with a line-numbered report of every problem. `header` is the index of the header row. */
 export function validate(kind: Kind, csv: { rows: string[][]; lines: number[]; delim?: string }, map: Mapping, header = 0): Validated<PlacementRow | FlightLine | FreqBucket> {
@@ -347,7 +362,7 @@ export function validate(kind: Kind, csv: { rows: string[][]; lines: number[]; d
       break
     }
     const first = rec[map[fields[0].key]] ?? ''
-    if (TOTAL_ROW.test(first.trim()) || TOTAL_ROW.test((rec[0] ?? '').trim())) { skipped++; issues.push({ line, message: 'Totals row skipped' }); continue }
+    if (isTotals(kind, rec, first.trim())) { skipped++; issues.push({ line, message: 'Totals row skipped' }); continue }
     // DV360 writes its grand total as a row with every dimension blank and only metrics filled.
     if (kind === 'placements' && !first.trim() && (r === csv.rows.length - 1 || isFooter(csv.rows[r + 1], width))) {
       skipped++; issues.push({ line, message: 'Totals row skipped (no placement, metrics only)' }); continue
