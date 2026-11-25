@@ -61,7 +61,7 @@ export interface FreqWaste {
   wastedImpressions: number
   wastedSpend: number
   share: number // of total impressions
-  buckets: { frequency: number; users: number; impressions: number; beyond: number }[]
+  buckets: { frequency: number; open?: boolean; users: number; impressions: number; beyond: number }[]
 }
 
 export interface Audit {
@@ -131,10 +131,10 @@ export function frequencyWaste(freq: FreqBucket[], placements: Placement[], cap:
     const buckets = [...freq].sort((a, b) => a.frequency - b.frequency).map(b => {
       const i = b.impressions ?? b.users * b.frequency
       const over = b.frequency > cap ? b.users * (b.frequency - cap) : 0
-      // When the bucket is "10+" style, impressions may exceed users×frequency; scale the overage to the bucket's real volume.
-      const scaled = b.frequency > cap && b.impressions ? b.impressions * (b.frequency - cap) / b.frequency : over
+      // An open "10+" bucket holds users well past its label: everything above cap × users is waste. An exact one is scaled to its real volume.
+      const scaled = b.open && b.impressions !== undefined ? Math.max(0, b.impressions - b.users * cap) : b.frequency > cap && b.impressions ? b.impressions * (b.frequency - cap) / b.frequency : over
       impr += i; beyond += scaled
-      return { frequency: b.frequency, users: b.users, impressions: i, beyond: scaled }
+      return { frequency: b.frequency, open: b.open, users: b.users, impressions: i, beyond: scaled }
     })
     const share = impr ? beyond / impr : 0
     return { source: 'distribution', cap, wastedImpressions: beyond, wastedSpend: share * totals.spend, share, buckets }

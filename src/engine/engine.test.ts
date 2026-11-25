@@ -7,7 +7,7 @@ import { autoMap, decodeBytes, detectKind, detectSource, findHeader, parseCsv, p
 import { allowlist, blocklist, compare, listable, snapshotOf } from './exports.ts'
 import { pacing } from './pacing.ts'
 import { generate, SAMPLES, sampleConfig, sampleHistory } from './sample.ts'
-import { DEFAULT_CONFIG, type Dataset, type PlacementRow } from './types.ts'
+import { DEFAULT_CONFIG, type Dataset, type FreqBucket, type PlacementRow } from './types.ts'
 
 const ds = (rows: PlacementRow[], extra: Partial<Dataset> = {}): Dataset => ({ rows, flight: [], freq: [], knownMfa: [], ...extra })
 const row = (placement: string, impressions: number, spend: number, clicks = 0, conversions = 0, extra: Partial<PlacementRow> = {}): PlacementRow => ({ placement, impressions, spend, clicks, conversions, ...extra })
@@ -177,6 +177,28 @@ test('frequency waste from a distribution counts exposures beyond the cap', () =
   assert.equal(f.wastedImpressions, 320)
   assert.ok(Math.abs(f.share - 320 / 1000) < 1e-9)
   assert.ok(Math.abs(f.wastedSpend - 32) < 1e-9)
+})
+
+test('frequency waste: an open "10+" bucket counts everything above the cap', () => {
+  const t = totalsOf([{ impressions: 1800, clicks: 0, conversions: 0, spend: 100 }])
+  const read = (text: string) => { const csv = parseCsv(text); return validate('freq', csv, autoMap('freq', csv.rows[0])) }
+  const waste = (text: string, cap = 6) => frequencyWaste(read(text).rows as FreqBucket[], [], cap, t)
+  const v = read('frequency,users,impressions\n2,100,200\n10+,80,1600\n')
+  assert.deepEqual(v.rows, [{ frequency: 2, users: 100, impressions: 200 }, { frequency: 10, open: true, users: 80, impressions: 1600 }])
+  assert.deepEqual(v.issues, [])
+  const f = waste('frequency,users,impressions\n2,100,200\n10+,80,1600\n')
+  assert.equal(f.wastedImpressions, 1120)
+  assert.ok(Math.abs(f.share - 1120 / 1800) < 1e-9)
+  // A bucket that opens below the cap can still pass it, and never goes negative.
+  assert.equal(waste('frequency,users,impressions\n5+,80,1600\n').wastedImpressions, 1120)
+  assert.equal(waste('frequency,users,impressions\n10 +,80,400\n').wastedImpressions, 0)
+  // Exact buckets are unchanged, even when their impressions do not match the label.
+  assert.equal(waste('frequency,users,impressions\n10,80,1600\n').wastedImpressions, 640)
+  // Without impressions it is a minimum, and the report says so.
+  const none = read('frequency,users\n10+,80\n')
+  assert.match(none.issues[0].message, /"10\+" has no impressions, so its users are counted at 10 each/)
+  assert.equal(waste('frequency,users\n10+,80\n').wastedImpressions, 320)
+  for (const bad of ['+', '10++', '10+5', 'x+', '1.5+', '-10+']) assert.equal(read(`frequency,users\n2,1\n${bad},80\n`).rows.length, 1, bad)
 })
 
 test('frequency waste falls back to per-placement average frequency', () => {

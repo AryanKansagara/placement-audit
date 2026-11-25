@@ -27,6 +27,8 @@ export interface FlightLine {
 /** One bucket of a frequency distribution report: `users` people saw the ad `frequency` times. */
 export interface FreqBucket {
   frequency: number
+  /** A "10+" bucket: `frequency` or more exposures. */
+  open?: boolean
   users: number
   impressions?: number
   conversions?: number

@@ -69,7 +69,7 @@ test('#9 day-first dates', async ({ page }) => {
   await expect(kpi(page, 'Spend audited')).toContainText('2026-11-02 to 2026-11-13', { timeout: 3000 })
 })
 
-test.fail('#10 the 10+ frequency bucket', async ({ page }) => {
+test('#10 the 10+ frequency bucket', async ({ page }) => {
   await newAudit(page)
   await importFile(page, { name: 'h.csv', text: HAND }, 7)
   await tab(page, 'Data')
@@ -78,6 +78,8 @@ test.fail('#10 the 10+ frequency bucket', async ({ page }) => {
   await tab(page, 'Overview')
   // 1600 - 80 x 6 = 1,120 of 1,800
   await expect(kpi(page, 'Frequency waste')).toContainText('62.2% of impressions', { timeout: 3000 })
+  await tab(page, 'Pacing')
+  await expect(page.locator('.freq-col small')).toHaveText(['2', '10+'])
 })
 
 test('#11 a campaign-level flight plan', async ({ page }) => {
