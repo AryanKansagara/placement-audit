@@ -1,3 +1,4 @@
+import { normalize } from './domain.ts'
 import type { FlightLine, FreqBucket, PlacementRow } from './types.ts'
 
 
@@ -106,23 +107,90 @@ export const dayOf = (t: number) => new Date(t).toISOString().slice(0, 10)
 /**
  * Numbers as DSP exports write them: 1,234.50 / $12 / "--" / 45.2% / (12.00).
  * European exports (1.234,50 or 12,5) are read too: when both separators appear the last one is the decimal;
- * a lone comma is a decimal when `decimalComma` is set (semicolon-delimited files) or it is not followed by exactly 3 digits.
+ * a lone comma is a decimal when `decimalComma` is set (see decimalMarks) or it cannot be a thousands separator.
  */
 export function parseNum(raw: string, decimalComma = false): number {
-  let s = (raw ?? '').trim().replace(/[\s\u00a0$€£]/g, '').replace(/^[A-Z]{3}(?=[\d.(-])/, '').replace(/(?<=\d)[A-Z]{3}$/, '')
+  let s = bareNum(raw)
   const lastComma = s.lastIndexOf(','), lastDot = s.lastIndexOf('.')
   const commas = (s.match(/,/g) ?? []).length
-  const euro = lastComma > lastDot && (lastDot >= 0 || (commas === 1 && (decimalComma || !/^,\d{3}\D*$/.test(s.slice(lastComma)))))
-  const dotThousands = decimalComma && lastComma < 0 && /^-?\(?\d{1,3}(\.\d{3})+\D*$/.test(s)
+  const euro = lastComma > lastDot && (lastDot >= 0 || (commas === 1 && (decimalComma || !/^,\d{3}\D*$/.test(s.slice(lastComma)) || /^\D*(0|\d{4,}),/.test(s))))
+  const dotThousands = decimalComma && lastComma < 0 && /^-?\(?[1-9]\d{0,2}(\.\d{3})+\D*$/.test(s)
   s = euro || dotThousands ? s.replace(/\./g, '').replace(',', '.') : s.replace(/,/g, '')
   if (s === '' || s === '--' || s === '-' || /^(null|n\/a|na)$/i.test(s)) return NaN
   if (/^\(.*\)$/.test(s)) s = '-' + s.slice(1, -1)
-  if (s.endsWith('%')) return Number(s.slice(0, -1)) / 100
-  return Number(s)
+  const pct = s.endsWith('%')
+  if (pct) s = s.slice(0, -1)
+  // Number() also takes "Infinity", "0x10" and "": none of them is a metric.
+  if (!/^[+-]?(\d+\.?\d*|\.\d+)(e[+-]?\d+)?$/i.test(s) || !Number.isFinite(Number(s))) return NaN
+  return pct ? Number(s) / 100 : Number(s)
+}
+
+/** The cell without spaces, currency signs and currency codes. */
+const bareNum = (raw: string) => (raw ?? '').trim().replace(/[\s\u00a0$€£]/g, '').replace(/^[A-Z]{3}(?=[\d.(-])/, '').replace(/(?<=\d)[A-Z]{3}$/, '')
+
+/** Which decimal mark one cell proves: '.', ',' or null when it could be either (1.234) or neither (1234). */
+export function provenMark(raw: string): '.' | ',' | null {
+  const s = bareNum(raw).replace(/^\((.*)\)$/, '$1').replace(/^[+-]/, '').replace(/%$/, '')
+  if (/^\d{1,3}(,\d{3})+\.\d+$/.test(s) || /^\d*\.(\d{1,2}|\d{4,})$/.test(s) || /^(0|\d{4,})\.\d+$/.test(s) || /^\d{1,3}(,\d{2,3})+,\d{3}$/.test(s)) return '.'
+  if (/^\d{1,3}(\.\d{3})+,\d+$/.test(s) || /^\d*,(\d{1,2}|\d{4,})$/.test(s) || /^(0|\d{4,}),\d+$/.test(s) || /^\d{1,3}(\.\d{3}){2,}$/.test(s)) return ','
+  return null
+}
+const ambiguous = (raw: string) => /^[+-]?\(?[1-9]\d{0,2}[.,]\d{3}\D*$/.test(bareNum(raw))
+
+/** Counts are whole numbers, so a lone separator before three digits is a thousands separator in either style. */
+const COUNTS = new Set(['impressions', 'clicks', 'users'])
+
+/**
+ * The decimal mark per number column, decided from the file itself: the column's own unambiguous values first,
+ * then the whole file's, then the delimiter (semicolon files are European). Says so when the file contradicts itself.
+ */
+export function decimalMarks(fields: FieldSpec[], cells: Map<string, string[]>, delim?: string): { comma: Map<string, boolean>; counts: Set<string>; notes: string[] } {
+  const one = (xs: ('.' | ',' | null)[]) => {
+    const set = new Set(xs.filter(x => x !== null))
+    return set.size === 1 ? [...set][0] : set.size ? 'both' as const : null
+  }
+  const num = fields.filter(f => f.type === 'num' || f.type === 'rate')
+  const own = new Map(num.map(f => {
+    const xs = cells.get(f.key) ?? []
+    const mark = one(xs.map(provenMark))
+    // One stray or cut-off "1,2" among thousands such as 1,234 proves nothing about the column.
+    const outvoted = (mark === '.' || mark === ',') && xs.filter(x => ambiguous(x) && x.includes(mark)).length > xs.filter(x => provenMark(x) === mark).length
+    return [f.key, outvoted ? 'both' as const : mark]
+  }))
+  // "18.402" impressions also proves the file's style, unless that column itself uses decimals.
+  const counts = (k: string) => COUNTS.has(k) && (own.get(k) === null || own.get(k) === 'both')
+  const file = one(num.flatMap(f => counts(f.key)
+    ? (cells.get(f.key) ?? []).map(c => (ambiguous(c) ? (bareNum(c).includes('.') ? ',' : '.') as ',' | '.' : null))
+    : [own.get(f.key) ?? null].flatMap(m => (m === 'both' ? ['.', ','] as const : [m]))))
+  const comma = new Map<string, boolean>()
+  const notes: string[] = []
+  for (const f of num) {
+    const mark = own.get(f.key) ?? null
+    if (mark === '.' || mark === ',') { comma.set(f.key, mark === ','); continue }
+    const chosen = file === '.' || file === ',' ? file === ',' : delim === ';'
+    comma.set(f.key, chosen)
+    const sample = (cells.get(f.key) ?? []).find(ambiguous)
+    if (!sample || counts(f.key)) continue
+    const was = `"${sample.trim().slice(0, 20)}" was read as ${parseNum(sample, chosen)}`
+    if (mark === 'both' || file === 'both') notes.push(`${f.label}: the file mixes decimal commas and decimal points, so ${was}. Check it`)
+    else if (chosen !== (delim === ';')) notes.push(`${f.label}: ${was}, because other numbers in the file use a decimal ${chosen ? 'comma' : 'point'}`)
+  }
+  return { comma, counts: new Set(num.filter(f => counts(f.key)).map(f => f.key)), notes }
 }
 
 /** Rates may arrive as 0.45, 45 or 45%. Anything above 1 is read as a percentage. */
 export const asRate = (n: number) => (n > 1 ? n / 100 : n)
+
+/**
+ * Whether a rate column without % signs is in percentage points (0.8, 31.5) rather than fractions (0.008, 0.315).
+ * An IVT fraction cannot pass 1, so one value above 1 is enough. Viewability can (1.02 from a measurement glitch)
+ * but is rarely under 1%, so at least half of its non-zero values must be above 1.
+ */
+export function isPercentColumn(key: string, values: number[]): boolean {
+  const nonZero = values.filter(v => v > 0)
+  const above = nonZero.filter(v => v > 1).length
+  return above > 0 && (key === 'ivt' || above * 2 >= nonZero.length)
+}
 
 export type Kind = 'placements' | 'flight' | 'freq'
 export type Source = 'stackadapt' | 'ttd' | 'dv360' | 'gads' | 'generic'
@@ -234,7 +302,34 @@ const isFooter = (rec: string[], width: number) => {
   return /^[\w ./()-]{2,40}:$/.test((rec[0] ?? '').trim()) && filled <= 2 && filled < width
 }
 
-const TOTAL_ROW = /^(total|totals|grand total|summary)\b/i
+/** The raw cells of each mapped number column, down to the report footer. */
+function columns(fields: FieldSpec[], rows: string[][], map: Mapping, header: number): Map<string, string[]> {
+  const out = new Map(fields.map(f => [f.key, [] as string[]]))
+  const width = rows[header]?.length ?? 0
+  for (const rec of rows.slice(header + 1)) {
+    if (isFooter(rec, width)) break
+    if (rec.length < width && rec === rows[rows.length - 1]) break // cut off: its last value may be incomplete
+    if (rec.slice(width).some(c => c.trim())) continue // shifted: not read below
+    for (const f of fields) if (map[f.key] !== undefined) out.get(f.key)!.push(rec[map[f.key]] ?? '')
+  }
+  return out
+}
+
+const TOTAL_WORD = /^(total|totals|grand total|summary)\b/i
+/** Wording only a totals row has: "Total", "Total: account", "Totals (25 rows)", "Total - Campaigns", "Total for ...". */
+const TOTAL_LABEL = /^((grand )?totals?|summary)\s*($|[:(]|[-\u2013\u2014]\s|\s[-\u2013\u2014]|\s(for|of|all|rows?)\b)/i
+
+/** Grand-total rows repeat the spend of the rows above. A campaign, line or site merely named "Total ..." does not. */
+function isTotals(kind: Kind, rec: string[], first: string): boolean {
+  const lead = (rec[0] ?? '').trim()
+  if (/^((grand )?totals?|summary):?$/i.test(lead)) return true
+  // A real domain, app ID or bundle is delivery, whatever its campaign is called.
+  if (kind === 'placements' && (/^\S+\.[^\s.]+$/.test(first) || normalize(first).kind !== 'web')) return false
+  if (TOTAL_LABEL.test(first) || TOTAL_LABEL.test(lead)) return true
+  // Other placement text starting with the word still reads as a totals label.
+  if (kind === 'placements') return TOTAL_WORD.test(first) || TOTAL_WORD.test(lead)
+  return false
+}
 
 /** Turns raw records into typed rows with a line-numbered report of every problem. `header` is the index of the header row. */
 export function validate(kind: Kind, csv: { rows: string[][]; lines: number[]; delim?: string }, map: Mapping, header = 0): Validated<PlacementRow | FlightLine | FreqBucket> {
@@ -245,7 +340,17 @@ export function validate(kind: Kind, csv: { rows: string[][]; lines: number[]; d
   const total = csv.rows.length - header - 1
   for (const f of fields) if (f.required && !(f.key in map)) issues.push({ line: csv.lines[header] ?? 1, message: `Required column "${f.label}" is not mapped` })
   if (issues.length) return { rows: [], issues, skipped: total, total }
-  const decimalComma = csv.delim === ';'
+  const cells = columns(fields, csv.rows, map, header)
+  const marks = decimalMarks(fields, cells, csv.delim)
+  for (const message of marks.notes) issues.push({ line: csv.lines[header] ?? 1, message })
+  const points = new Set<string>()
+  for (const f of fields) if (f.type === 'rate') {
+    const bare = (cells.get(f.key) ?? []).filter(c => !c.includes('%')).map(c => parseNum(c, marks.comma.get(f.key))).filter(n => !Number.isNaN(n))
+    if (!isPercentColumn(f.key, bare)) continue
+    points.add(f.key)
+    const small = bare.find(n => n > 0 && n <= 1)
+    if (small !== undefined) issues.push({ line: csv.lines[header] ?? 1, message: `${f.label}: values without a % sign go up to ${bare.reduce((a, b) => Math.max(a, b), 0)}, so the column was read as percentages (${small} is ${small}%)` })
+  }
   const width = csv.rows[header]?.length ?? 0
   for (let r = header + 1; r < csv.rows.length; r++) {
     const rec = csv.rows[r]
@@ -257,10 +362,14 @@ export function validate(kind: Kind, csv: { rows: string[][]; lines: number[]; d
       break
     }
     const first = rec[map[fields[0].key]] ?? ''
-    if (TOTAL_ROW.test(first.trim()) || TOTAL_ROW.test((rec[0] ?? '').trim())) { skipped++; issues.push({ line, message: 'Totals row skipped' }); continue }
+    if (isTotals(kind, rec, first.trim())) { skipped++; issues.push({ line, message: 'Totals row skipped' }); continue }
     // DV360 writes its grand total as a row with every dimension blank and only metrics filled.
     if (kind === 'placements' && !first.trim() && (r === csv.rows.length - 1 || isFooter(csv.rows[r + 1], width))) {
       skipped++; issues.push({ line, message: 'Totals row skipped (no placement, metrics only)' }); continue
+    }
+    // Values past the last header mean an unquoted separator (1,234) shifted the columns: none of them can be trusted.
+    if (rec.slice(width).some(c => c.trim())) {
+      skipped++; issues.push({ line, message: `Row has ${rec.length} values for ${width} columns, so it was not read. A number such as 1,234 may need quotes` }); continue
     }
     const obj: Record<string, unknown> = {}
     let bad = false
@@ -283,14 +392,14 @@ export function validate(kind: Kind, csv: { rows: string[][]; lines: number[]; d
         obj[f.key] = dayOf(t)
         continue
       }
-      const n = parseNum(raw, decimalComma)
+      const n = parseNum(raw, marks.counts.has(f.key) && ambiguous(raw) ? bareNum(raw).includes('.') : marks.comma.get(f.key))
       if (Number.isNaN(n)) {
         if (raw.trim() && !/^(--|-|null|n\/a|na)$/i.test(raw.trim())) { issues.push({ line, message: `${f.label} "${raw.slice(0, 40)}" is not a number` }); bad = true }
         else if (f.required) { issues.push({ line, message: `${f.label} is empty` }); bad = true }
         continue
       }
       if (n < 0) { issues.push({ line, message: `${f.label} is negative (${n})` }); bad = true; continue }
-      obj[f.key] = f.type === 'rate' ? asRate(n) : n
+      obj[f.key] = f.type !== 'rate' ? n : points.has(f.key) && !raw.includes('%') ? n / 100 : asRate(n)
     }
     if (bad) { skipped++; continue }
     if (kind === 'placements') { obj.clicks ??= 0; obj.conversions ??= 0 }
