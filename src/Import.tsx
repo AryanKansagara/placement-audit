@@ -10,9 +10,17 @@ import { ask, download, Empty, go, Link, toast } from './ui.tsx'
 
 interface Pending { id: string; name: string; csv: ReturnType<typeof parseCsv>; header: number; kind: Kind | null; source: Source; map: Mapping }
 
+/** Files read but not imported yet, per audit, so leaving the Data tab does not drop them. */
+const waiting = new Map<string, Pending[]>()
+
 export default function DataTab({ project, ds, reload }: { project: Project; ds: Dataset | null; reload(): void }) {
   const data = ds ?? EMPTY_DATASET
-  const [pending, setPending] = useState<Pending[]>([])
+  const [pending, show] = useState<Pending[]>(() => waiting.get(project.id) ?? [])
+  const setPending = (change: (list: Pending[]) => Pending[]) => {
+    const next = change(waiting.get(project.id) ?? [])
+    waiting.set(project.id, next)
+    show(next)
+  }
   const [drag, setDrag] = useState(false)
   const [busy, setBusy] = useState(false)
   const [listText, setListText] = useState('')
@@ -45,19 +53,28 @@ export default function DataTab({ project, ds, reload }: { project: Project; ds:
     return { id: (await (started.current ??= createBlankProject('My campaign audit'))).id, fresh: true }
   }
 
+  /** Files still waiting move along to the audit started from a sample. */
+  const moveWaiting = (id: string) => {
+    const all = [...(waiting.get(id) ?? []), ...(waiting.get(project.id) ?? [])]
+    waiting.delete(project.id)
+    waiting.set(id, all)
+    return all.length
+  }
+
   const commit = async (pd: Pending, rows: unknown[], skipped: number) => {
     if (!pd.kind) return
+    setPending(x => x.filter(y => y.id !== pd.id))
     const { id, fresh } = await target()
     const before = await updateData(id, base => pd.kind === 'placements' ? { ...base, rows: rows as PlacementRow[] }
       : pd.kind === 'flight' ? { ...base, flight: [...base.flight.filter(f => !(rows as FlightLine[]).some(n => n.line.toLowerCase() === f.line.toLowerCase())), ...(rows as FlightLine[])] }
         : { ...base, freq: rows as FreqBucket[] })
     const meta = { id: uuid(), kind: pd.kind, source: pd.kind === 'placements' ? pd.source : undefined, fileName: pd.name, rows: rows.length, skipped, at: Date.now() }
-    setPending(x => x.filter(y => y.id !== pd.id))
     const msg = `Imported ${rows.length.toLocaleString()} ${KINDS[pd.kind].title.toLowerCase()} rows${skipped ? `, skipped ${skipped}` : ''}`
     if (fresh) {
       await logChange(id, 'Imported', `${pd.name}: ${rows.length} rows`, p => ({ imports: [...p.imports, meta] }))
       toast(`${msg} into a new audit (samples are read-only).`, { tone: 'ok' })
-      go(`/app/p/${id}`)
+      const left = moveWaiting(id)
+      go(`/app/p/${id}${left ? '/data' : ''}`)
       return
     }
     await logChange(id, 'Imported', `${pd.name}: ${rows.length} ${KINDS[pd.kind].title.toLowerCase()} rows${pd.kind === 'placements' ? ` (${SOURCES[pd.source]})` : ''}`, p => ({ imports: [...p.imports, meta], dataMissing: false }))
@@ -71,7 +88,7 @@ export default function DataTab({ project, ds, reload }: { project: Project; ds:
       reload()
     }
     toast(msg, { tone: 'ok', undo: pd.kind === 'placements' && before.rows.length ? () => void undo() : undefined })
-    if (pd.kind === 'placements') go(`/app/p/${project.id}`)
+    if (pd.kind === 'placements' && !waiting.get(project.id)?.length) go(`/app/p/${project.id}`)
   }
 
   const addList = async (text: string, name: string) => {
@@ -80,7 +97,7 @@ export default function DataTab({ project, ds, reload }: { project: Project; ds:
     const { id, fresh } = await target()
     await updateData(id, d => ({ ...d, knownMfa: [...new Set([...d.knownMfa, ...keys])] }))
     const meta = { id: uuid(), kind: 'mfa' as const, fileName: name, rows: keys.length, skipped: 0, at: Date.now() }
-    if (fresh) { await updateProject(id, p => ({ imports: [...p.imports, meta] })); go(`/app/p/${id}/data`) }
+    if (fresh) { await updateProject(id, p => ({ imports: [...p.imports, meta] })); moveWaiting(id); go(`/app/p/${id}/data`) }
     else { await logChange(id, 'Added known-MFA list', `${name}: ${keys.length} entries`, p => ({ imports: [...p.imports, meta] })); reload() }
     setListText('')
     toast(`Added ${keys.length} entries to the known-MFA list`, { tone: 'ok' })

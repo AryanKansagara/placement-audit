@@ -194,7 +194,7 @@ test('#14 undoing a snapshot keeps a later one', async ({ page }) => {
   await expect(page.getByLabel('Flag at score')).toHaveValue('75')
 })
 
-test.fail('#15 importing the placement report keeps the other dropped file', async ({ page }) => {
+test('#15 importing the placement report keeps the other dropped file', async ({ page }) => {
   await newAudit(page)
   await choose(page, { name: 'daily.csv', text: DAILY }, { name: 'flight.csv', text: FLIGHT })
   await expect(page.locator('.pending')).toHaveCount(2)
@@ -202,6 +202,41 @@ test.fail('#15 importing the placement report keeps the other dropped file', asy
   await expect(page.locator('.toast', { hasText: 'Imported 5' })).toBeVisible()
   await tab(page, 'Data')
   await expect(card(page, 'flight.csv')).toBeVisible({ timeout: 3000 })
+  // Still there after a look at another tab, and the last import moves on to the Overview.
+  await tab(page, 'Overview')
+  await tab(page, 'Data')
+  await card(page, 'flight.csv').getByRole('button', { name: 'Import 1 rows' }).click()
+  await expect(page.locator('.pending')).toHaveCount(0)
+  await tab(page, 'Overview')
+  await expect(kpi(page, 'Pacing')).toContainText('1 of 1')
+})
+
+test('#15 the app stays on the Data tab while a file waits, and moves on after the last one', async ({ page }) => {
+  await newAudit(page)
+  await choose(page, { name: 'flight.csv', text: FLIGHT }, { name: 'daily.csv', text: DAILY }, { name: 'odd.csv', text: 'colour,size\nred,1\n' })
+  await expect(page.locator('.pending')).toHaveCount(3)
+  await card(page, 'daily.csv').getByRole('button', { name: 'Import 5 rows' }).click()
+  await expect(page.locator('.cov', { hasText: 'Placement report' })).toContainText('5 rows')
+  await expect(page.locator('.pending')).toHaveCount(2)
+  await page.locator('.pending', { hasText: 'odd.csv' }).locator('select').first().selectOption('placements')
+  await page.locator('.pending', { hasText: 'odd.csv' }).getByRole('button', { name: 'Discard' }).click()
+  await card(page, 'flight.csv').getByRole('button', { name: 'Import 1 rows' }).click()
+  await expect(page.locator('.cov', { hasText: 'Flight plan' })).toContainText('1 line items')
+  await importFile(page, { name: 'h.csv', text: HAND }, 7)
+  await expect(kpi(page, 'Spend audited')).toContainText('$800')
+})
+
+test('#15 importing into a sample carries the waiting files to the new audit', async ({ page }) => {
+  await page.goto('/app?sample=northwind&tab=data')
+  await choose(page, { name: 'daily.csv', text: DAILY }, { name: 'flight.csv', text: FLIGHT })
+  await expect(page.locator('.pending')).toHaveCount(2)
+  await card(page, 'daily.csv').getByRole('button', { name: 'Import 5 rows' }).click()
+  await expect(page.getByRole('heading', { name: 'My campaign audit' })).toBeVisible()
+  await expect(page.locator('.cov', { hasText: 'Placement report' })).toContainText('5 rows')
+  await card(page, 'flight.csv').getByRole('button', { name: 'Import 1 rows' }).click()
+  await expect(page.locator('.cov', { hasText: 'Flight plan' })).toContainText('1 line items')
+  await page.goto('/app')
+  await expect(page.getByRole('link', { name: 'My campaign audit' })).toHaveCount(1)
 })
 
 test.fail('#16 the reasons CSV does not carry formulas', async ({ page }) => {
