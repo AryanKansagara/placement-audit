@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { domainPattern, normalize } from './domain.ts'
-import { frequencyWaste, median, projectWhatIf, robustZ, runAudit, totalsOf } from './audit.ts'
+import { frequencyWaste, median, projectWhatIf, robustZ, runAudit, totalsOf, type Placement } from './audit.ts'
 import { readFileSync } from 'node:fs'
 import { autoMap, decodeBytes, detectKind, detectSource, findHeader, parseCsv, parseList, parseNum, sniffDelimiter, validate } from './csv.ts'
 import { allowlist, blocklist, compare, listable, snapshotOf } from './exports.ts'
@@ -266,6 +266,16 @@ test('upload lists carry only domains, IPs, app IDs and CTV IDs', () => {
   for (const f of ['plain', 'stackadapt', 'ttd', 'dv360', 'gads'] as const) assert.doesNotMatch(blocklist(a.flagged, f), /low volume/i, f)
   assert.match(blocklist(a.flagged, 'reasons'), /^low volume inventory,/m)
   assert.equal(blocklist(a.flagged.slice(0, 1), 'ttd'), '')
+})
+
+test('the reasons CSV carries no formulas; numbers and ordinary names are unchanged', () => {
+  const evil = ['=1+1', '+cmd', '-2+3', '@sum(a1)', '\tx', '\rx', '=hyperlink("http://x.example","a")']
+  const p = (key: string): Placement => ({ ...runAudit(ds([row('ok.example', 1000, 10)]), DEFAULT_CONFIG).placements[0], key, spend: -5 })
+  const csv = blocklist([...evil, 'ok.example', 'a=b-c.example'].map(p), 'reasons')
+  const rows = parseCsv(csv).rows.slice(1)
+  assert.deepEqual(rows.map(r => r[0]), [...evil.map(k => "'" + k), 'ok.example', 'a=b-c.example'])
+  assert.deepEqual(rows[0].slice(1, 5), ['web', '0', '-5', '1000'])
+  for (const f of ['plain', 'stackadapt', 'ttd', 'dv360', 'gads'] as const) assert.doesNotMatch(blocklist(evil.map(p), f), /[=+@]|-2/, f)
 })
 
 test('allowlist keeps clean converting placements only', () => {

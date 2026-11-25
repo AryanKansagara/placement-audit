@@ -19,6 +19,9 @@ const gadsKey = (p: Pick<Placement, 'key' | 'kind'>) => {
 }
 const storeId = (p: Pick<Placement, 'key' | 'kind'>) => (p.kind === 'app' && /^id\d+$/.test(p.key) ? p.key.slice(2) : p.key)
 
+/** Names come from the open exchange: a leading quote mark keeps a spreadsheet from running them as formulas. */
+const asText = (s: string) => (/^[=+\-@\t\r]/.test(s) ? `'${s}` : s)
+
 /** An address, a domain with a real ending, or a numeric / bundle / store ID: the only things a DSP can match. */
 export function listable(p: Pick<Placement, 'key' | 'kind'>): boolean {
   const k = p.key
@@ -42,7 +45,7 @@ export function blocklist(list: Placement[], format: ListFormat, header = ''): s
     case 'gads': return toCsv([['Placement'], ...ps.map(p => [gadsKey(p)])])
     case 'reasons': return toCsv([
       ['placement', 'type', 'score', 'spend', 'impressions', 'conversions', 'ctr', 'viewability', 'ivt', 'reasons'],
-      ...ps.map(p => [p.key, p.kind, p.score, Math.round(p.spend * 100) / 100, p.impressions, p.conversions, Math.round(p.ctr * 1e5) / 1e5, p.viewability === null ? '' : Math.round(p.viewability * 1000) / 1000, p.ivt === null ? '' : Math.round(p.ivt * 1000) / 1000, p.signals.map(s => s.detail).join('; ')]),
+      ...ps.map(p => [asText(p.key), p.kind, p.score, Math.round(p.spend * 100) / 100, p.impressions, p.conversions, Math.round(p.ctr * 1e5) / 1e5, p.viewability === null ? '' : Math.round(p.viewability * 1000) / 1000, p.ivt === null ? '' : Math.round(p.ivt * 1000) / 1000, asText(p.signals.map(s => s.detail).join('; '))]),
     ])
   }
 }
