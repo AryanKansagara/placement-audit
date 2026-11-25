@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { autoMap, detectKind, findHeader, parseCsv, parseNum, validate } from './csv.ts'
+import { autoMap, detectKind, findHeader, parseCsv, parseNum, parseTime, validate } from './csv.ts'
 import type { PlacementRow } from './types.ts'
 
 const read = (text: string) => {
@@ -86,6 +86,40 @@ test('a row with more values than headers is refused; empty trailing cells are n
   assert.deepEqual(v.rows.map(r => [r.placement, r.impressions, r.spend]), [['a.example', 1000, 10], ['c.example', 1234, 10.5]])
   assert.equal(v.skipped, 1)
   assert.deepEqual(v.issues, [{ line: 3, message: 'Row has 4 values for 3 columns, so it was not read. A number such as 1,234 may need quotes' }])
+})
+
+const dates = (...ds: string[]) => read('date,domain,impressions,spend\n' + ds.map(d => `${d},a.example,1,1\n`).join(''))
+
+test('dates: a column with a first number above 12 is day first throughout', () => {
+  assert.deepEqual(dates('13/11/2026', '02/11/2026', '2026-11-03').rows.map(r => r.date), ['2026-11-13', '2026-11-02', '2026-11-03'])
+  assert.deepEqual(dates('02/11/2026', '11/13/2026').rows.map(r => r.date), ['2026-02-11', '2026-11-13'])
+  assert.deepEqual(dates('02/11/2026 7:30 PM', '13/11/2026 23:59').rows.map(r => r.date), ['2026-11-02', '2026-11-13'])
+  assert.deepEqual(dates('02/11/2026', '3/1/2026').rows.map(r => r.date), ['2026-02-11', '2026-03-01'])
+  assert.deepEqual(dates('02/11/2026', '13/11/2026').issues, [])
+})
+
+test('dates: the other date column of a flight plan settles an ambiguous one', () => {
+  const f = read('line item,budget,start date,end date\nA,100,01/11/2026,30/11/2026\n').rows as unknown as { start: string; end: string }[]
+  assert.deepEqual([f[0].start, f[0].end], ['2026-11-01', '2026-11-30'])
+})
+
+test('dates: impossible dates are not dates', () => {
+  for (const s of ['2026-02-31', '2026-13-01', '2026-00-10', '2026/02/30', '2/30/2026', '13/13/2026', '0/1/2026', '2026-11-01 25:00', '2026-11-01 10:60']) {
+    assert.ok(Number.isNaN(parseTime(s)), s)
+    const v = dates(s, '2026-11-02')
+    assert.deepEqual(v.rows.map(r => r.date), ['2026-11-02'], s)
+    assert.deepEqual(v.issues, [{ line: 2, message: `Date "${s}" is not a date` }])
+  }
+  for (const s of ['2028-02-29', '2026-11-01T23:59:59Z', '2026-11-01 24:00', '12/31/2026 11:59 PM', '2026-11-01 00:30 +05:30']) assert.ok(!Number.isNaN(parseTime(s)), s)
+  assert.deepEqual(dates('31/02/2026', '02/11/2026').rows.map(r => r.date), ['2026-11-02'])
+  assert.deepEqual(dates('13/13/2026', '02/11/2026').rows.map(r => r.date), ['2026-02-11'])
+})
+
+test('dates: a column in both orders is reported and its ambiguous dates are not guessed', () => {
+  const v = dates('13/11/2026', '11/14/2026', '02/11/2026', '05/05/2026', '2026-11-01')
+  assert.deepEqual(v.rows.map(r => r.date), ['2026-11-13', '2026-11-14', '2026-05-05', '2026-11-01'])
+  assert.match(v.issues[0].message, /Date: some dates are day first \(13\/11\/2026\) and some month first \(11\/14\/2026\)/)
+  assert.deepEqual(v.issues[1], { line: 4, message: 'Date "02/11/2026" could be day first or month first' })
 })
 
 test('totals rows are skipped in every wording', () => {
