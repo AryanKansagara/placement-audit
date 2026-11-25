@@ -2,7 +2,7 @@ import { card, choose, DAILY, expect, fixture, FLIGHT, HAND, importFile, keys, k
 
 // Each test states the correct behavior for a filed bug and is expected to fail until it is fixed.
 
-test.fail('#2 a percentage-point column reads 0.8 as 0.8%', async ({ page }) => {
+test('#2 a percentage-point column reads 0.8 as 0.8%', async ({ page }) => {
   await newAudit(page)
   await importFile(page, { name: 'r.csv', text: 'domain,impressions,spend,IVT %\na.example,10000,100,0.8\nb.example,10000,100,31.5\n' }, 2)
   await tab(page, 'Placements')
