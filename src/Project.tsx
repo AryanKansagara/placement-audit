@@ -21,7 +21,7 @@ export interface TabProps {
   ds: Dataset
   audit: Audit
   pace: LinePacing[]
-  update(p: Partial<Project>): void
+  update(change: Partial<Project> | ((p: Project) => Partial<Project>)): void
   setOverride(key: string, v: Override | null): void
   openPlacement(key: string): void
   saveSnapshot(): void
@@ -44,22 +44,24 @@ export default function ProjectView({ id, tab: rawTab }: { id: string; tab: stri
   const setTab = (t: Tab) => go(`/app/p/${id}${t === 'overview' ? '' : '/' + t}`, { keepScroll: true })
 
   const setOverride = (key: string, v: Override | null) => {
-    if (!project) return
-    const before = project.config.overrides
-    const overrides = { ...before }
-    if (v) overrides[key] = v
-    else delete overrides[key]
-    void logChange(id, v === 'allow' ? 'Allowed placement' : v === 'block' ? 'Blocked placement' : 'Cleared override', key, { config: { ...project.config, overrides } })
-    toast(v ? `${v === 'allow' ? 'Allowed' : 'Blocked'} ${key}` : `Cleared override on ${key}`, { undo: () => void logChange(id, 'Undid override', key, { config: { ...project.config, overrides: before } }) })
+    // Both directions touch this key only, in the audit as it is by then.
+    const put = (p: Project, to: Override | null) => {
+      const overrides = { ...p.config.overrides }
+      if (to) overrides[key] = to
+      else delete overrides[key]
+      return { config: { ...p.config, overrides } }
+    }
+    let before: Override | null = null
+    void logChange(id, v === 'allow' ? 'Allowed placement' : v === 'block' ? 'Blocked placement' : 'Cleared override', key, p => { before = p.config.overrides[key] ?? null; return put(p, v) })
+    toast(v ? `${v === 'allow' ? 'Allowed' : 'Blocked'} ${key}` : `Cleared override on ${key}`, { undo: () => void logChange(id, 'Undid override', key, p => put(p, before)) })
   }
 
   const saveSnapshot = () => {
     if (!project || !audit) return
     const label = audit.period.from ? `${audit.period.from} to ${audit.period.to}` : new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
     const snap = snapshotOf(audit, uuid(), label)
-    const prev = project.snapshots
-    void logChange(id, 'Snapshot saved', `${label}: ${fmtUsd(audit.spendAtRisk)} at risk (${fmtPct(audit.riskShare, 1)})`, { snapshots: [...prev, snap] })
-    toast(`Saved a snapshot of ${label}`, { tone: 'ok', undo: () => void update({ snapshots: prev }) })
+    void logChange(id, 'Snapshot saved', `${label}: ${fmtUsd(audit.spendAtRisk)} at risk (${fmtPct(audit.riskShare, 1)})`, p => ({ snapshots: [...p.snapshots, snap] }))
+    toast(`Saved a snapshot of ${label}`, { tone: 'ok', undo: () => void update(p => ({ snapshots: p.snapshots.filter(s => s.id !== snap.id) })) })
   }
 
   useEffect(() => {

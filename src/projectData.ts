@@ -62,7 +62,7 @@ export function useProject(id: string) {
     void getData(project.id).then(d => { if (live) setDs(d ? { ...EMPTY_DATASET, ...d } : EMPTY_DATASET) })
     return () => { live = false }
   }, [project?.id, project?.sampleId, importsKey, version])
-  const update = (patch: Partial<Project>) => updateProject(id, patch)
+  const update = (change: Parameters<typeof updateProject>[1]) => updateProject(id, change)
   const setConfig = (patch: Partial<Config>) => updateProject(id, p => ({ config: { ...p.config, ...patch } }))
   return { loading: list === null || (project !== null && ds === null), project, ds, update, setConfig, reload: () => setVersion(v => v + 1) }
 }
