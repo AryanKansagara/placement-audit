@@ -144,7 +144,7 @@ test.fail('#16 the reasons CSV does not carry formulas', async ({ page }) => {
   expect(f.text).not.toMatch(/^=/m)
 })
 
-test.fail('#17 placeholders are not exported to a DSP list', async ({ page }) => {
+test('#17 placeholders are not exported to a DSP list', async ({ page }) => {
   await newAudit(page)
   await importFile(page, { name: 'dv.csv', buffer: fixture('dv360-app-url.csv') }, 4)
   await tab(page, 'Placements')
@@ -152,6 +152,14 @@ test.fail('#17 placeholders are not exported to a DSP list', async ({ page }) =>
   await tab(page, 'Exclusions')
   await expect(page.locator('.code pre')).toContainText('domain')
   await expect(page.locator('.code pre')).not.toContainText('low volume inventory', { timeout: 3000 })
+  await expect(page.locator('.names-note')).toContainText('1 flagged entry is not in the upload lists')
+  await expect(page.getByRole('button', { name: 'Download', exact: true })).toBeDisabled()
+  for (const f of [/^Plain list/, /^The Trade Desk/, /^DV360/, /^Google Ads/]) {
+    await page.getByRole('radio', { name: f }).click()
+    await expect(page.locator('.code pre')).not.toContainText('low volume inventory')
+  }
+  await page.getByRole('radio', { name: /^With reasons/ }).click()
+  await expect(page.locator('.code pre')).toContainText('low volume inventory')
 })
 
 test('#25 two imports in quick succession are both kept', async ({ page }) => {

@@ -4,7 +4,7 @@ import { domainPattern, normalize } from './domain.ts'
 import { frequencyWaste, median, projectWhatIf, robustZ, runAudit, totalsOf } from './audit.ts'
 import { readFileSync } from 'node:fs'
 import { autoMap, decodeBytes, detectKind, detectSource, findHeader, parseCsv, parseList, parseNum, sniffDelimiter, validate } from './csv.ts'
-import { allowlist, blocklist, compare, snapshotOf } from './exports.ts'
+import { allowlist, blocklist, compare, listable, snapshotOf } from './exports.ts'
 import { pacing } from './pacing.ts'
 import { generate, SAMPLES, sampleConfig, sampleHistory } from './sample.ts'
 import { DEFAULT_CONFIG, type Dataset, type PlacementRow } from './types.ts'
@@ -213,6 +213,17 @@ test('blocklists: DSP shapes for web and app placements', () => {
   assert.ok(blocklist(a.flagged, 'stackadapt').startsWith('domain\n'))
   assert.ok(blocklist(a.flagged, 'plain', 'Audit 1').startsWith('# Audit 1\njunk.example'))
   assert.match(blocklist(a.flagged, 'reasons'), /Matches your uploaded list/)
+})
+
+test('upload lists carry only domains, IPs, app IDs and CTV IDs', () => {
+  const ok = ['a.example', 'https://www.b.co.uk/x', 'münchen.example', 'xn--mnchen-3ya.example', 'under_score.example.com', '192.0.2.10', 'com.example.game', 'com.Example.App_1', 'id1234567890', '1234567890', 'mobileapp::2-com.example.x', 'roku:418822', '418822', 'ctv:northlight-tv', '111299001912', 'G15147002586', 'B00KDSGIPK', 'anonymous.google', 'मराठी.भारत']
+  const not = ['Low volume inventory', 'Unknown', 'Solitaire Classic', 'Angry Game 2.0', 'Dr. Smith', 'N/A', '--', 'localhost', '300.1.1.1', 'northlight-tv', 'mobileapp::2-some name', 'ctv:Some Channel', '=1+1', '@sum(a1)', '+cmd.example', '-x.example', '=x.example', 'mobileapp::2-=1+1', 'ctv:=1+1']
+  for (const s of ok) assert.ok(listable(normalize(s)), s)
+  for (const s of not) assert.ok(!listable(normalize(s)), s)
+  const a = runAudit(ds([row('Low volume inventory', 5000, 20), row('junk.example', 5000, 10)]), { ...DEFAULT_CONFIG, overrides: { 'low volume inventory': 'block', 'junk.example': 'block' } })
+  for (const f of ['plain', 'stackadapt', 'ttd', 'dv360', 'gads'] as const) assert.doesNotMatch(blocklist(a.flagged, f), /low volume/i, f)
+  assert.match(blocklist(a.flagged, 'reasons'), /^low volume inventory,/m)
+  assert.equal(blocklist(a.flagged.slice(0, 1), 'ttd'), '')
 })
 
 test('allowlist keeps clean converting placements only', () => {

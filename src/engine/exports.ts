@@ -19,13 +19,26 @@ const gadsKey = (p: Pick<Placement, 'key' | 'kind'>) => {
 }
 const storeId = (p: Pick<Placement, 'key' | 'kind'>) => (p.kind === 'app' && /^id\d+$/.test(p.key) ? p.key.slice(2) : p.key)
 
+/** An address, a domain with a real ending, or a numeric / bundle / store ID: the only things a DSP can match. */
+export function listable(p: Pick<Placement, 'key' | 'kind'>): boolean {
+  const k = p.key
+  if (p.kind === 'app') return /^id\d+$/.test(k) || /^\w[\w-]*(\.[\w-]+)+$/.test(k)
+  if (p.kind === 'ctv') return /^[\p{L}\p{N}][\p{L}\p{N}._:/-]*$/u.test(k)
+  // Bare CTV store IDs: Samsung (111299001912, G15147002586) and Amazon (B00KDSGIPK).
+  if (/^g?\d{11,15}$/.test(k) || /^b0[a-z0-9]{8}$/.test(k)) return true
+  const v4 = k.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/)
+  if (v4) return v4.slice(1).every(n => Number(n) <= 255)
+  return /^([\p{L}\p{N}_]([\p{L}\p{M}\p{N}_-]*[\p{L}\p{M}\p{N}])?\.)+(xn--[a-z0-9-]+|[\p{L}\p{M}]{2,})$/u.test(k)
+}
+
+/** Upload lists leave out names no DSP can match; the reasons file keeps every placement. */
 export function blocklist(list: Placement[], format: ListFormat, header = ''): string {
-  const ps = [...list].sort((a, b) => b.spend - a.spend)
+  const ps = list.filter(p => format === 'reasons' || listable(p)).sort((a, b) => b.spend - a.spend)
   switch (format) {
-    case 'plain': return (header ? header.split('\n').map(l => '# ' + l).join('\n') + '\n' : '') + ps.map(p => p.key).join('\n') + '\n'
+    case 'plain': return (header ? header.split('\n').map(l => '# ' + l).join('\n') + '\n' : '') + ps.map(p => p.key + '\n').join('')
     case 'stackadapt': return toCsv([['domain'], ...ps.map(p => [storeId(p)])])
-    case 'ttd': return ps.map(p => storeId(p)).join('\n') + '\n'
-    case 'dv360': return ps.map(p => storeId(p)).join('\n') + '\n'
+    case 'ttd': return ps.map(p => storeId(p) + '\n').join('')
+    case 'dv360': return ps.map(p => storeId(p) + '\n').join('')
     case 'gads': return toCsv([['Placement'], ...ps.map(p => [gadsKey(p)])])
     case 'reasons': return toCsv([
       ['placement', 'type', 'score', 'spend', 'impressions', 'conversions', 'ctr', 'viewability', 'ivt', 'reasons'],
