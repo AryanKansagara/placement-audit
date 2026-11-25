@@ -69,7 +69,16 @@ export function sniffDelimiter(text: string): string {
 }
 
 
-export function parseTime(raw: string): number {
+/** Rejects what Date.UTC would roll over: month 13, 31 February, 25:00. */
+function utc(y: number, mo: number, d: number, h: number, mi: number, se: number, ms = 0): number {
+  const day = new Date(Date.UTC(y, mo - 1, d))
+  if (day.getUTCFullYear() !== y || day.getUTCMonth() !== mo - 1 || day.getUTCDate() !== d) return NaN
+  if (h * 60 + mi > 1440 || mi > 59 || se > 60) return NaN
+  return Date.UTC(y, mo - 1, d, h, mi, se, ms)
+}
+
+/** A slash date is month first unless `dayFirst` is set (see dateOrders). */
+export function parseTime(raw: string, dayFirst = false): number {
   const s = raw.trim()
   if (!s) return NaN
   if (/^\d{10}(\.\d+)?$/.test(s)) return Math.round(Number(s) * 1000)
@@ -77,7 +86,7 @@ export function parseTime(raw: string): number {
   const m = s.match(/^(\d{4})[-/](\d{2})[-/](\d{2})(?:[ T](\d{1,2}):(\d{2})(?::(\d{2})(?:\.(\d+))?)?)?\s*(Z|UTC|[+-]\d{2}:?\d{2})?$/i)
   if (m) {
     const [, y, mo, d, h = '0', mi = '0', se = '0', frac = '0', tz] = m
-    let t = Date.UTC(+y, +mo - 1, +d, +h, +mi, +se, Math.round(Number('0.' + frac) * 1000))
+    let t = utc(+y, +mo, +d, +h, +mi, +se, Math.round(Number('0.' + frac) * 1000))
     if (tz && !/^(z|utc)$/i.test(tz)) {
       const sign = tz[0] === '-' ? -1 : 1
       const digits = tz.slice(1).replace(':', '')
@@ -85,14 +94,34 @@ export function parseTime(raw: string): number {
     }
     return t
   }
-  // US style from spreadsheets: 10/1/2026 7:00(:00)( AM)
+  // From spreadsheets: 10/1/2026 7:00(:00)( AM)
   const u = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM)?)?$/i)
   if (u) {
     let h = Number(u[4] ?? 0)
     if (u[7]) h = (h % 12) + (/pm/i.test(u[7]) ? 12 : 0)
-    return Date.UTC(+u[3], +u[1] - 1, +u[2], h, Number(u[5] ?? 0), Number(u[6] ?? 0))
+    return utc(+u[3], +u[dayFirst ? 2 : 1], +u[dayFirst ? 1 : 2], h, Number(u[5] ?? 0), Number(u[6] ?? 0))
   }
   return NaN
+}
+
+export type DateOrder = 'month' | 'day' | 'mixed'
+
+/** The order one slash date proves, or null when it could be either (2/11/2026), is neither, or is not a slash date. */
+function provenOrder(raw: string): 'month' | 'day' | null {
+  const m = raw.trim().match(/^(\d{1,2})\/(\d{1,2})\/\d{4}\b/)
+  const a = Number(m?.[1]), b = Number(m?.[2])
+  return a > 12 && b <= 12 ? 'day' : b > 12 && a <= 12 ? 'month' : null
+}
+
+/** The order of each date column: its own dates first, then the rest of the file's, then month first. */
+export function dateOrders(fields: FieldSpec[], cells: Map<string, string[]>): Map<string, DateOrder> {
+  const days = fields.filter(f => f.type === 'day')
+  const own = new Map(days.map(f => {
+    const seen = new Set((cells.get(f.key) ?? []).map(provenOrder))
+    return [f.key, seen.has('day') ? (seen.has('month') ? 'mixed' : 'day') : seen.has('month') ? 'month' : null] as [string, DateOrder | null]
+  }))
+  const known = new Set([...own.values()].filter(o => o === 'day' || o === 'month'))
+  return new Map(days.map(f => [f.key, own.get(f.key) ?? (known.size === 1 ? [...known][0]! : 'month')]))
 }
 
 export function toCsv(rows: (string | number)[][]): string {
@@ -343,6 +372,11 @@ export function validate(kind: Kind, csv: { rows: string[][]; lines: number[]; d
   const cells = columns(fields, csv.rows, map, header)
   const marks = decimalMarks(fields, cells, csv.delim)
   for (const message of marks.notes) issues.push({ line: csv.lines[header] ?? 1, message })
+  const orders = dateOrders(fields, cells)
+  for (const f of fields) if (orders.get(f.key) === 'mixed') {
+    const proof = (o: string) => cells.get(f.key)!.find(c => provenOrder(c) === o)!.trim().slice(0, 20)
+    issues.push({ line: csv.lines[header] ?? 1, message: `${f.label}: some dates are day first (${proof('day')}) and some month first (${proof('month')}), so dates that could be either were not read` })
+  }
   const points = new Set<string>()
   for (const f of fields) if (f.type === 'rate') {
     const bare = (cells.get(f.key) ?? []).filter(c => !c.includes('%')).map(c => parseNum(c, marks.comma.get(f.key))).filter(n => !Number.isNaN(n))
@@ -384,7 +418,12 @@ export function validate(kind: Kind, csv: { rows: string[][]; lines: number[]; d
         continue
       }
       if (f.type === 'day') {
-        const t = parseTime(raw)
+        const order = orders.get(f.key)
+        const t = parseTime(raw, order === 'day' || (order === 'mixed' && provenOrder(raw) === 'day'))
+        if (order === 'mixed' && /^\d{1,2}\/\d{1,2}\//.test(raw.trim()) && !provenOrder(raw) && parseTime(raw, true) !== t) {
+          issues.push({ line, message: `${f.label} "${raw.slice(0, 40)}" could be day first or month first` }); bad = true
+          continue
+        }
         if (Number.isNaN(t)) {
           if (f.required || raw.trim()) { issues.push({ line, message: `${f.label} "${raw.slice(0, 40)}" is not a date` }); bad = true }
           continue

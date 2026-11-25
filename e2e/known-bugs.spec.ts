@@ -59,7 +59,7 @@ test.fail('#8 an unclosed quote is reported', async ({ page }) => {
   await expect(card(page, 'r.csv').locator('.report')).toContainText(/quote/i, { timeout: 3000 })
 })
 
-test.fail('#9 day-first dates', async ({ page }) => {
+test('#9 day-first dates', async ({ page }) => {
   await newAudit(page)
   await importFile(page, { name: 'r.csv', text: 'date,domain,impressions,spend\n13/11/2026,a.example,1000,10\n02/11/2026,a.example,1000,10\n' }, 2)
   await expect(kpi(page, 'Spend audited')).toContainText('2026-11-02 to 2026-11-13', { timeout: 3000 })
