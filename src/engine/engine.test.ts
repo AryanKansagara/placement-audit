@@ -216,6 +216,16 @@ test('pacing: a campaign-level line counts all its line items; a line item match
   assert.equal(pacing([f('Same')], [day('Same', 'Same', 10)])[0].spent, 10)
 })
 
+test('pacing: without dated rows there is nothing to pace', () => {
+  const f = (line: string) => ({ line, budget: 3000, start: '2026-11-01', end: '2026-11-30' })
+  const undated: PlacementRow = { ...row('a.example', 100, 600), line: 'A' }
+  assert.deepEqual(pacing([f('A')], [undated]), [])
+  assert.deepEqual(pacing([f('A')], []), [])
+  // A line whose own rows are undated is left out; one with no rows at all has really spent nothing.
+  const p = pacing([f('A'), f('B'), f('C')], [undated, { ...row('a.example', 100, 5), line: 'B', date: '2026-11-01' }])
+  assert.deepEqual(p.map(l => [l.line, l.spent]), [['B', 5], ['C', 0]])
+})
+
 test('blocklists: DSP shapes for web and app placements', () => {
   const a = runAudit(ds([row('junk.example', 5000, 20), row('com.example.flash', 5000, 10), row('id1900000966', 5000, 5)], { knownMfa: ['junk.example', 'com.example.flash', 'id1900000966'] }), DEFAULT_CONFIG)
   assert.equal(blocklist(a.flagged, 'gads'), 'Placement\njunk.example\nmobileapp::2-com.example.flash\nmobileapp::1-1900000966\n')

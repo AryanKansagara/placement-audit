@@ -38,14 +38,16 @@ function PaceChart({ l }: { l: LinePacing }) {
   )
 }
 
-function Pacing({ audit, pace }: TabProps) {
+function Pacing({ audit, pace, ds }: TabProps) {
+  const unpaced = ds.flight.filter(l => !pace.some(p => p.line === l.line))
   const f = audit.freq
   const maxU = Math.max(1, ...f.buckets.map(b => b.impressions))
   return (
     <div className="tab-body">
       <div className="panel">
         <div className="panel-head wrap"><h2>Pacing by line item</h2><span className="muted small">Even pacing. Under below 90% of expected, over above 110%.</span></div>
-        {!pace.length ? <Empty title="No flight plan yet"><p className="muted">Add a CSV with line item, budget, start and end dates on the Data tab. Pacing needs a report broken out by day.</p></Empty> : (
+        {pace.length > 0 && unpaced.length > 0 && <p className="small warn-text">Not paced: {unpaced.map(l => l.line).join(', ')}. Pacing needs a report broken out by day, and the rows for {unpaced.length > 1 ? 'these have' : 'this one have'} no dates.</p>}
+        {!pace.length && ds.flight.length > 0 ? <Empty title="No dates in the placement report"><p className="muted">Pacing needs a report broken out by day. The flight plan has {ds.flight.length} line item{ds.flight.length > 1 ? 's' : ''}, but the spend cannot be placed in {ds.flight.length > 1 ? 'their flights' : 'its flight'}. Export the report with a Date or Day column and import it again.</p></Empty> : !pace.length ? <Empty title="No flight plan yet"><p className="muted">Add a CSV with line item, budget, start and end dates on the Data tab. Pacing needs a report broken out by day.</p></Empty> : (
           <div className="pace-grid">
             {pace.map(l => (
               <article key={l.line} className={`pace-card ${l.status}`}>
