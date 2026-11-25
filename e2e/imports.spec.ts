@@ -81,6 +81,7 @@ test('known-MFA list: pasted and uploaded entries flag their placements', async 
   await tab(page, 'Data')
   await page.getByLabel('Known-MFA list').fill('# mine\njunk.example\n')
   await page.getByRole('button', { name: 'Add to list' }).click()
+  await expect(page.locator('.cov', { hasText: 'Known-MFA list' })).toContainText('1 entries')
   await page.locator('label', { hasText: 'Upload list' }).locator('input').setInputFiles({ name: 'l.csv', mimeType: 'text/csv', buffer: Buffer.from('domain,why\ncom.example.flash,x\n') })
   await expect(page.locator('.cov', { hasText: 'Known-MFA list' })).toContainText('2 entries')
   await tab(page, 'Placements')
