@@ -10,7 +10,7 @@ test.fail('#2 a percentage-point column reads 0.8 as 0.8%', async ({ page }) => 
   await expect(row(page, 'a.example')).toContainText('0.8%', { timeout: 3000 })
 })
 
-test.fail('#3 a German tab-separated report', async ({ page }) => {
+test('#3 a German tab-separated report', async ({ page }) => {
   await newAudit(page)
   await importFile(page, { name: 'r.tsv', text: 'Domain\tImpressions\tCost\na.example\t18.402\t152,73\nb.example\t1.204\t1.034,10\n' }, 2)
   await expect(kpi(page, 'Spend audited')).toContainText('$1,187')
@@ -18,7 +18,7 @@ test.fail('#3 a German tab-separated report', async ({ page }) => {
   await expect(kpi(page, 'Spend audited')).toContainText('19,606 impressions', { timeout: 3000 })
 })
 
-test.fail('#3 a semicolon file with dot decimals', async ({ page }) => {
+test('#3 a semicolon file with dot decimals', async ({ page }) => {
   await newAudit(page)
   await importFile(page, { name: 'r.csv', text: 'domain;impressions;spend\na.example;1000;12.345\nb.example;1000;3.5\n' }, 2)
   await expect(kpi(page, 'Spend audited').locator('b')).toHaveText('$16', { timeout: 3000 })
