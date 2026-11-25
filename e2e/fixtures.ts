@@ -39,6 +39,8 @@ export async function importFile(page: Page, f: File, rows: number) {
   await expect(card(page, f.name).locator('.report')).toContainText(new RegExp(`^${rows.toLocaleString('en-US')} rows? ready`))
   await card(page, f.name).getByRole('button', { name: /^Import [\d,]+ rows$/ }).click()
   await expect(card(page, f.name)).toHaveCount(0)
+  // The next write starts from what is on screen (#25), so wait until this one has been read back.
+  await expect(page.locator('.kpi').or(page.locator('.cov.ok')).first()).toBeVisible()
 }
 
 export const tab = (page: Page, name: string) => page.getByRole('navigation', { name: 'Audit sections' }).getByRole('link', { name: new RegExp(`^${name}`) }).click()

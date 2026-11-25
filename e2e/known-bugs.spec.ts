@@ -103,6 +103,7 @@ test.fail('#13 a small leaking placement is found in a long tail', async ({ page
   await page.getByRole('button', { name: 'Add to list' }).click()
   await expect(page.locator('.cov', { hasText: 'Known-MFA list' })).toContainText('1 entries')
   await page.getByRole('button', { name: 'Save snapshot' }).click()
+  await expect(page.getByRole('link', { name: /^History ?1$/ })).toBeVisible()
   await page.getByRole('button', { name: 'Save snapshot' }).click()
   await tab(page, 'History')
   await expect(page.locator('.kpi', { hasText: 'Leaking exclusions' }).locator('b')).toHaveText('1', { timeout: 3000 })
@@ -151,4 +152,14 @@ test.fail('#17 placeholders are not exported to a DSP list', async ({ page }) =>
   await tab(page, 'Exclusions')
   await expect(page.locator('.code pre')).toContainText('domain')
   await expect(page.locator('.code pre')).not.toContainText('low volume inventory', { timeout: 3000 })
+})
+
+test.fail('#25 two imports in quick succession are both kept', async ({ page }) => {
+  await newAudit(page)
+  await choose(page, { name: 'flight.csv', text: FLIGHT }, { name: 'f.csv', text: 'frequency,users\n2,100\n' })
+  await expect(page.locator('.pending')).toHaveCount(2)
+  await page.evaluate(() => document.querySelectorAll<HTMLButtonElement>('.pending .btn.primary').forEach(b => b.click()))
+  await expect(page.locator('.pending')).toHaveCount(0)
+  await expect(page.locator('.cov', { hasText: 'Frequency report' })).toContainText('1 buckets')
+  await expect(page.locator('.cov', { hasText: 'Flight plan' })).toContainText('1 line items', { timeout: 3000 })
 })
