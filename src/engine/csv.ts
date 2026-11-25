@@ -14,8 +14,9 @@ export function decodeBytes(buf: ArrayBuffer | Uint8Array): string {
   return new TextDecoder('utf-8').decode(b)
 }
 
-/** RFC 4180 CSV (quotes, escaped quotes, CRLF, newlines in quotes). Also returns the line each record starts on and the delimiter used. */
-export function parseCsv(text: string): { rows: string[][]; lines: number[]; delim: string } {
+/** RFC 4180 CSV (quotes, escaped quotes, CRLF, newlines in quotes). Also returns the line each record starts on and the delimiter used.
+ * When a quote is still open at the end of the text, `unclosed` is its line; the record it is in is not returned. */
+export function parseCsv(text: string): { rows: string[][]; lines: number[]; delim: string; unclosed?: number } {
   if (text.charCodeAt(0) === 0xfeff) text = text.slice(1)
   const delim = sniffDelimiter(text)
   const rows: string[][] = []
@@ -25,6 +26,7 @@ export function parseCsv(text: string): { rows: string[][]; lines: number[]; del
   let quoted = false
   let line = 1
   let rowLine = 1
+  let quoteLine = 1
   for (let i = 0; i < text.length; i++) {
     const c = text[i]
     if (quoted) {
@@ -36,7 +38,7 @@ export function parseCsv(text: string): { rows: string[][]; lines: number[]; del
       }
       continue
     }
-    if (c === '"' && field === '') quoted = true
+    if (c === '"' && field === '') { quoted = true; quoteLine = line }
     else if (c === delim) { row.push(field); field = '' }
     else if (c === '\n' || c === '\r') {
       if (c === '\r' && text[i + 1] === '\n') i++
@@ -47,6 +49,7 @@ export function parseCsv(text: string): { rows: string[][]; lines: number[]; del
       rowLine = line
     } else field += c
   }
+  if (quoted) return { rows, lines, delim, unclosed: quoteLine }
   if (field !== '' || row.length) {
     row.push(field)
     if (row.length > 1 || row[0] !== '') { rows.push(row); lines.push(rowLine) }
@@ -360,15 +363,18 @@ function isTotals(kind: Kind, rec: string[], first: string): boolean {
   return false
 }
 
+export const unclosedMessage = (line: number) => `The quote (") opened on line ${line} never closes, so that row and the rest of the file after it were not read`
+
 /** Turns raw records into typed rows with a line-numbered report of every problem. `header` is the index of the header row. */
-export function validate(kind: Kind, csv: { rows: string[][]; lines: number[]; delim?: string }, map: Mapping, header = 0): Validated<PlacementRow | FlightLine | FreqBucket> {
+export function validate(kind: Kind, csv: { rows: string[][]; lines: number[]; delim?: string; unclosed?: number }, map: Mapping, header = 0): Validated<PlacementRow | FlightLine | FreqBucket> {
   const fields = KINDS[kind].fields
   const issues: Issue[] = []
   const out: Record<string, unknown>[] = []
-  let skipped = 0
-  const total = csv.rows.length - header - 1
+  let skipped = csv.unclosed ? 1 : 0
+  const total = csv.rows.length - header - 1 + skipped
   for (const f of fields) if (f.required && !(f.key in map)) issues.push({ line: csv.lines[header] ?? 1, message: `Required column "${f.label}" is not mapped` })
   if (issues.length) return { rows: [], issues, skipped: total, total }
+  if (csv.unclosed) issues.push({ line: csv.unclosed, message: unclosedMessage(csv.unclosed) })
   const cells = columns(fields, csv.rows, map, header)
   const marks = decimalMarks(fields, cells, csv.delim)
   for (const message of marks.notes) issues.push({ line: csv.lines[header] ?? 1, message })

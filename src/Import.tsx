@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from 'react'
-import { autoMap, decodeBytes, detectKind, detectSource, findHeader, KINDS, parseCsv, parseList, SOURCES, toCsv, validate, type Kind, type Mapping, type Source } from './engine/csv.ts'
+import { autoMap, decodeBytes, detectKind, detectSource, findHeader, KINDS, parseCsv, parseList, SOURCES, toCsv, unclosedMessage, validate, type Kind, type Mapping, type Source } from './engine/csv.ts'
 import { normalize } from './engine/domain.ts'
 import { toExportCsv } from './engine/sample.ts'
 import { EMPTY_DATASET, type Dataset, type FlightLine, type FreqBucket, type PlacementRow } from './engine/types.ts'
@@ -37,7 +37,7 @@ export default function DataTab({ project, ds, reload }: { project: Project; ds:
       const text = decodeBytes(await f.arrayBuffer())
       await new Promise(r => setTimeout(r, 0))
       const csv = parseCsv(text)
-      if (csv.rows.length < 2) { toast(`${f.name} has no data rows.`, { tone: 'error' }); continue }
+      if (csv.rows.length < 2) { toast(csv.unclosed ? `${f.name}: ${unclosedMessage(csv.unclosed)}.` : `${f.name} has no data rows.`, { tone: 'error' }); continue }
       const header = findHeader(csv.rows)
       const kind = detectKind(csv.rows[header])
       next.push({ id: uuid(), name: f.name, csv, header, kind, source: detectSource(csv.rows[header]), map: kind ? autoMap(kind, csv.rows[header]) : {} })
