@@ -70,22 +70,22 @@ export interface Snapshot {
   riskShare: number
   freqWaste: number
   projectedCpa: number | null
-  /** Flagged placements at the time (key, spend, score), top 300 by spend. */
+  /** Flagged placements at the time (key, spend, score), by spend. Snapshots saved before November 2026 stop at 300. */
   flagged: [string, number, number][]
-  /** Spend by placement for the top 500, to check whether excluded placements still received money. */
+  /** Spend by placement, to check whether excluded placements still received money. Older snapshots stop at the top 500. */
   spendBy: Record<string, number>
 }
 
 export function snapshotOf(a: Audit, id: string, label: string, at = Date.now()): Snapshot {
   const spendBy: Record<string, number> = {}
-  for (const p of a.placements.slice(0, 500)) spendBy[p.key] = Math.round(p.spend * 100) / 100
+  for (const p of a.placements) spendBy[p.key] = Math.round(p.spend * 100) / 100
   return {
     id, label, at, period: a.period,
     spend: a.totals.spend, impressions: a.totals.impressions, conversions: a.totals.conversions, revenue: a.totals.revenue,
     cpa: a.totals.cpa, roas: a.totals.roas, placements: a.placements.length,
     flaggedCount: a.flagged.length, spendAtRisk: a.spendAtRisk, riskShare: a.riskShare, freqWaste: a.freq.wastedSpend,
     projectedCpa: a.whatIf.after.cpa,
-    flagged: a.flagged.slice(0, 300).map(p => [p.key, Math.round(p.spend * 100) / 100, p.score]),
+    flagged: a.flagged.map(p => [p.key, Math.round(p.spend * 100) / 100, p.score]),
     spendBy,
   }
 }
@@ -103,6 +103,21 @@ export interface Compare {
   added: [string, number, number][]
   /** Flagged in A and still taking spend in B: the exclusion did not land. */
   leaking: [string, number][]
+  /** Flagged in A, but a cut-off snapshot does not say whether it still takes spend in B. */
+  unknown: number
+  /** Either snapshot is cut off, so absence from it proves nothing. */
+  partial: boolean
+}
+
+const spendCut = (s: Snapshot) => Object.keys(s.spendBy).length < s.placements
+const flagsCut = (s: Snapshot) => s.flagged.length < s.flaggedCount
+
+/** Whether the snapshot shows that a placement missing from its flagged list was not flagged. */
+function notFlagged(s: Snapshot, key: string): boolean {
+  if (!flagsCut(s)) return true
+  const spend = s.spendBy[key]
+  // The list is by spend: a flagged placement above its last entry would be on it.
+  return spend === undefined ? !spendCut(s) : spend > (s.flagged.at(-1)?.[1] ?? Infinity)
 }
 
 export function compare(a: Snapshot, b: Snapshot): Compare {
@@ -114,8 +129,10 @@ export function compare(a: Snapshot, b: Snapshot): Compare {
     spendAtRiskDelta: b.spendAtRisk - a.spendAtRisk,
     cpaDelta: a.cpa !== null && b.cpa !== null ? b.cpa - a.cpa : null,
     freqWasteDelta: b.freqWaste - a.freqWaste,
-    resolved: a.flagged.filter(f => !flaggedB.has(f[0])).map(f => f[0]),
-    added: b.flagged.filter(f => !flaggedA.has(f[0])),
+    resolved: a.flagged.filter(f => !flaggedB.has(f[0]) && notFlagged(b, f[0])).map(f => f[0]),
+    added: b.flagged.filter(f => !flaggedA.has(f[0]) && notFlagged(a, f[0])),
     leaking: a.flagged.filter(f => (b.spendBy[f[0]] ?? 0) > 0).map(f => [f[0], b.spendBy[f[0]]] as [string, number]).sort((x, y) => y[1] - x[1]),
+    unknown: a.flaggedCount - a.flagged.length + (spendCut(b) ? a.flagged.filter(f => b.spendBy[f[0]] === undefined).length : 0),
+    partial: [a, b].some(s => spendCut(s) || flagsCut(s)),
   }
 }

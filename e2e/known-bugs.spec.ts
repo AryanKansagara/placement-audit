@@ -93,7 +93,7 @@ test.fail('#12 a report without dates has no pacing verdict', async ({ page }) =
   await expect(page.getByText('Under-pacing', { exact: true })).toHaveCount(0, { timeout: 3000 })
 })
 
-test.fail('#13 a small leaking placement is found in a long tail', async ({ page }) => {
+test('#13 a small leaking placement is found in a long tail', async ({ page }) => {
   test.slow()
   await newAudit(page)
   const tail = Array.from({ length: 600 }, (_, i) => `site${i}.example,10000,100\n`).join('')
@@ -107,6 +107,43 @@ test.fail('#13 a small leaking placement is found in a long tail', async ({ page
   await page.getByRole('button', { name: 'Save snapshot' }).click()
   await tab(page, 'History')
   await expect(page.locator('.kpi', { hasText: 'Leaking exclusions' }).locator('b')).toHaveText('1', { timeout: 3000 })
+})
+
+test('#13 snapshots cut off by an earlier version are not called a success', async ({ page }) => {
+  test.slow()
+  await newAudit(page)
+  const tail = Array.from({ length: 600 }, (_, i) => `site${i}.example,10000,100\n`).join('')
+  await importFile(page, { name: 'a.csv', text: `domain,impressions,spend\n${tail}small.example,10000,20\nbig.example,10000,9000\n` }, 602)
+  await tab(page, 'Data')
+  await page.getByLabel('Known-MFA list').fill('small.example\nbig.example')
+  await page.getByRole('button', { name: 'Add to list' }).click()
+  await expect(page.locator('.cov', { hasText: 'Known-MFA list' })).toContainText('2 entries')
+  await page.getByRole('button', { name: 'Save snapshot' }).click()
+  await expect(page.getByRole('link', { name: /^History ?1$/ })).toBeVisible()
+  await importFile(page, { name: 'b.csv', text: `domain,impressions,spend\n${tail}small.example,10000,20\n` }, 601)
+  await expect(kpi(page, 'Spend at risk')).toContainText('$20')
+  await page.getByRole('button', { name: 'Save snapshot' }).click()
+  await expect(page.getByRole('link', { name: /^History ?2$/ })).toBeVisible()
+  // Cut the stored snapshots the way the earlier version did.
+  await page.evaluate(() => new Promise<void>((res, rej) => {
+    const open = indexedDB.open('placement-audit')
+    open.onsuccess = () => {
+      const s = open.result.transaction('projects', 'readwrite').objectStore('projects')
+      const all = s.getAll()
+      all.onsuccess = () => {
+        const p = all.result[0]
+        for (const x of p.snapshots) x.spendBy = Object.fromEntries(Object.entries(x.spendBy).slice(0, 500))
+        const put = s.put(p)
+        put.onsuccess = () => res()
+        put.onerror = () => rej(put.error)
+      }
+    }
+  }))
+  await page.reload()
+  await tab(page, 'History')
+  await expect(page.locator('.kpi', { hasText: 'Leaking exclusions' })).toContainText('2 unknown')
+  await expect(page.locator('.verdict')).toContainText('cannot show whether the exclusions worked')
+  await expect(page.locator('.partial-note')).toBeVisible()
 })
 
 test.fail('#14 undoing one override keeps the next one', async ({ page }) => {

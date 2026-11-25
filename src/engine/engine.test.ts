@@ -245,6 +245,31 @@ test('compare: resolved, newly flagged and leaking exclusions', () => {
   assert.ok(c.spendAtRiskDelta < 0)
 })
 
+test('compare: a long tail is kept whole, and cut-off snapshots claim nothing', () => {
+  const tail = (n: number, spend: number) => Array.from({ length: n }, (_, i) => row(`site${i}.example`, 1000, spend))
+  const junk = Array.from({ length: 400 }, (_, i) => row(`junk${i}.example`, 1000, 2 - i / 1000))
+  const known = junk.map(r => r.placement)
+  const before = snapshotOf(runAudit(ds([...tail(700, 10), ...junk], { knownMfa: known }), DEFAULT_CONFIG), 'a', 'A')
+  const after = snapshotOf(runAudit(ds([...tail(700, 10), junk[399]], { knownMfa: known }), DEFAULT_CONFIG), 'b', 'B')
+  const c = compare(before, after)
+  assert.deepEqual(c.leaking, [['junk399.example', 1.6]])
+  assert.equal(c.resolved.length, 399)
+  assert.deepEqual([c.added.length, c.unknown, c.partial], [0, 0, false])
+  // As an earlier version stored them.
+  const cut = (s: typeof before) => ({ ...s, flagged: s.flagged.slice(0, 300), spendBy: Object.fromEntries(Object.entries(s.spendBy).slice(0, 500)) })
+  const old = compare(cut(before), cut(after))
+  assert.ok(old.partial)
+  assert.equal(old.unknown, 400)
+  assert.deepEqual(old.leaking, [])
+  // B's one flag is listed, so the other 300 are known to be gone; A's list is full, so B's flag may be old.
+  assert.equal(old.resolved.length, 300)
+  assert.deepEqual(old.added, [])
+  const half = compare(cut(before), after)
+  assert.deepEqual([half.partial, half.unknown, half.added.length], [true, 100, 0])
+  const back = compare(before, cut(before))
+  assert.deepEqual([back.resolved.length, back.unknown, back.partial], [0, 400, true])
+})
+
 test('parseList reads one-per-line and first-column CSV lists, skipping headers and comments', () => {
   assert.deepEqual(parseList('# my list\ndomain\njunk.example\n"other.example",reason\n\n'), ['junk.example', 'other.example'])
 })
