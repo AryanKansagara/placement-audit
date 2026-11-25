@@ -27,17 +27,18 @@ export interface LinePacing {
 
 /**
  * Even-pacing tracker. Expected spend to date = budget × elapsed / total days; under below 90%, over above 110%.
- * Rows are matched to a flight line by line item, then by campaign. Rows without a date are ignored here.
+ * Rows are matched to a flight line by line item; when no row has that line item, by campaign. Rows without a date are ignored here.
  */
 export function pacing(flight: FlightLine[], rows: PlacementRow[], asOfOverride?: string): LinePacing[] {
   const dated = rows.filter(r => r.date)
   const lastData = dated.reduce((m, r) => (r.date! > m ? r.date! : m), '')
   return flight.map(f => {
     const key = f.line.trim().toLowerCase()
+    const is = (name?: string) => name?.trim().toLowerCase() === key
+    const byLine = rows.some(r => is(r.line))
     const daily = new Map<string, number>()
     for (const r of dated) {
-      const k = (r.line ?? r.campaign ?? '').trim().toLowerCase()
-      if (k !== key) continue
+      if (!is(byLine ? r.line : r.campaign)) continue
       daily.set(r.date!, (daily.get(r.date!) ?? 0) + r.spend)
     }
     const s = dayNum(f.start), e = dayNum(f.end)

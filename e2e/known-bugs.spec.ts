@@ -76,7 +76,7 @@ test.fail('#10 the 10+ frequency bucket', async ({ page }) => {
   await expect(kpi(page, 'Frequency waste')).toContainText('62.2% of impressions', { timeout: 3000 })
 })
 
-test.fail('#11 a campaign-level flight plan', async ({ page }) => {
+test('#11 a campaign-level flight plan', async ({ page }) => {
   await newAudit(page)
   await importFile(page, { name: 'f.csv', text: FLIGHT.replace('Line A', 'Camp') }, 1)
   await importFile(page, { name: 'd.csv', text: DAILY.replace('date,', 'campaign,date,').replace(/^2026/gm, 'Camp,2026') }, 5)
