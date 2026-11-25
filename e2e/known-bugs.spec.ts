@@ -52,11 +52,15 @@ test('#7 a row with an unquoted thousands comma is refused', async ({ page }) =>
   await expect(card(page, 'r.csv').locator('.report')).toContainText('1 row ready, 1 skipped', { timeout: 3000 })
 })
 
-test.fail('#8 an unclosed quote is reported', async ({ page }) => {
+test('#8 an unclosed quote is reported', async ({ page }) => {
   await newAudit(page)
   await choose(page, { name: 'r.csv', text: 'domain,impressions,spend\na.example,1000,10\n"b.example,1000,10\nc.example,1000,10\n' })
   await expect(card(page, 'r.csv').locator('.report')).toContainText('1 row ready')
   await expect(card(page, 'r.csv').locator('.report')).toContainText(/quote/i, { timeout: 3000 })
+  await expect(card(page, 'r.csv').locator('.report')).toContainText('1 skipped')
+  await expect(card(page, 'r.csv').locator('.issues')).toHaveText(/^line 3 The quote \("\) opened on line 3 never closes, so that row and the rest of the file after it were not read$/)
+  await choose(page, { name: 'h.csv', text: '"domain,impressions,spend\na.example,1000,10\n' })
+  await expect(page.locator('.toast')).toContainText('opened on line 1 never closes')
 })
 
 test('#9 day-first dates', async ({ page }) => {

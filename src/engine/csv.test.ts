@@ -122,6 +122,31 @@ test('dates: a column in both orders is reported and its ambiguous dates are not
   assert.deepEqual(v.issues[1], { line: 4, message: 'Date "02/11/2026" could be day first or month first' })
 })
 
+test('an unclosed quote is reported with its line, and nothing from it on is read', () => {
+  const t = 'domain,impressions,spend\na.example,1000,10\n"b.example,1000,10\nc.example,1000,10\nd.example,1000,10\n'
+  for (const s of [t, t.replace(/\n/g, '\r\n')]) {
+    const v = read(s)
+    assert.deepEqual(v.rows.map(r => r.placement), ['a.example'])
+    assert.deepEqual([v.skipped, v.total], [1, 2])
+    assert.deepEqual(v.issues, [{ line: 3, message: 'The quote (") opened on line 3 never closes, so that row and the rest of the file after it were not read' }])
+  }
+  // Cut off inside a quoted last field, or right after its opening quote; earlier quoted newlines still count as lines.
+  for (const cut of ['b.example,10,"1,2', 'b.example,10,"', '"', '"b.exa', '"b.example","1,2""']) {
+    const v = read(`domain,impressions,spend,campaign\na.example,1000,10,"one\ntwo"\n${cut}`)
+    assert.deepEqual(v.rows.map(r => r.campaign), ['one\ntwo'], cut)
+    assert.deepEqual(v.issues.map(i => i.line), [4], cut)
+    assert.match(v.issues[0].message, /opened on line 4 never closes/)
+  }
+})
+
+test('closed quotes and stray quotes inside a value are not reported', () => {
+  for (const s of ['"a.example","1,000","10"', 'a "b" c.example,1000,10', 'a.example,1000,10,"x ""y"" z"', '"a.example",1000,"10"\n']) {
+    const csv = parseCsv(`domain,impressions,spend,note\n${s}`)
+    assert.equal(csv.unclosed, undefined, s)
+    assert.equal(csv.rows.length, 2, s)
+  }
+})
+
 test('totals rows are skipped in every wording', () => {
   for (const label of ['Total', 'totals', 'Grand Total', 'Total: account', 'Total: Display Network', 'Total - Campaigns', 'Totals (25 rows)', 'Total for all placements', 'Summary', 'Summary:', 'Total Display']) {
     assert.deepEqual(read(`domain,impressions,spend\na.example,1000,10\n${label},1000,10\n`).rows.map(r => r.placement), ['a.example'], label)
