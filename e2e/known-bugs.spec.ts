@@ -151,7 +151,7 @@ test('#13 snapshots cut off by an earlier version are not called a success', asy
   await expect(page.locator('.partial-note')).toBeVisible()
 })
 
-test.fail('#14 undoing one override keeps the next one', async ({ page }) => {
+test('#14 undoing one override keeps the next one', async ({ page }) => {
   await newAudit(page)
   await importFile(page, { name: 'h.csv', text: HAND }, 7)
   await tab(page, 'Placements')
@@ -162,6 +162,36 @@ test.fail('#14 undoing one override keeps the next one', async ({ page }) => {
   await page.locator('.toast', { hasText: 'Blocked clean1.example' }).getByRole('button', { name: 'Undo' }).click()
   await expect(row(page, 'clean1.example').getByRole('button', { name: 'Block', exact: true })).toBeVisible()
   await expect(row(page, 'clean2.example').getByRole('button', { name: 'Reset block' })).toBeVisible({ timeout: 3000 })
+})
+
+test('#14 undo keeps a threshold changed in between, and puts the earlier override back', async ({ page }) => {
+  await newAudit(page)
+  await importFile(page, { name: 'h.csv', text: HAND }, 7)
+  await tab(page, 'Placements')
+  await row(page, 'bad.example').getByRole('button', { name: 'Allow' }).click()
+  await row(page, 'bad.example').getByRole('button', { name: 'Reset allow' }).click()
+  await expect(row(page, 'bad.example').getByRole('button', { name: 'Allow' })).toBeVisible()
+  await page.getByLabel('Flag at score').fill('75')
+  await expect(row(page, 'bad.example').getByRole('button', { name: 'Block' })).toBeVisible()
+  await page.locator('.toast', { hasText: 'Cleared override on bad.example' }).getByRole('button', { name: 'Undo' }).click()
+  await expect(row(page, 'bad.example').getByRole('button', { name: 'Reset allow' })).toBeVisible()
+  await expect(page.getByLabel('Flag at score')).toHaveValue('75')
+})
+
+test('#14 undoing a snapshot keeps a later one', async ({ page }) => {
+  await newAudit(page)
+  await importFile(page, { name: 'h.csv', text: HAND }, 7)
+  await page.getByRole('button', { name: 'Save snapshot' }).click()
+  await expect(page.getByRole('link', { name: /^History ?1$/ })).toBeVisible()
+  await page.getByLabel('Flag at score').fill('75')
+  await page.getByRole('button', { name: 'Save snapshot' }).click()
+  await expect(page.getByRole('link', { name: /^History ?2$/ })).toBeVisible()
+  await page.locator('.toast', { hasText: 'Saved a snapshot' }).first().getByRole('button', { name: 'Undo' }).click()
+  await expect(page.getByRole('link', { name: /^History ?1$/ })).toBeVisible()
+  await tab(page, 'History')
+  // The later one, at threshold 75, has nothing flagged.
+  await expect(page.locator('table.data tbody tr')).toContainText('$0')
+  await expect(page.getByLabel('Flag at score')).toHaveValue('75')
 })
 
 test.fail('#15 importing the placement report keeps the other dropped file', async ({ page }) => {

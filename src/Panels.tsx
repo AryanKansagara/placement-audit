@@ -172,10 +172,10 @@ function History({ project, audit, update, saveSnapshot }: TabProps) {
   const c = snaps.length >= 2 && snaps[ai] && snaps[bi] && ai !== bi ? compare(snaps[ai], snaps[bi]) : null
   const removeSnap = async (id: string) => {
     if (!(await ask('Delete this snapshot?', 'It is removed from this device and your cloud account. You can undo for a few seconds.', 'Delete snapshot'))) return
-    const prev = project.snapshots
-    void update({ snapshots: prev.filter(s => s.id !== id) })
+    const gone = project.snapshots.find(s => s.id === id)
+    void update(p => ({ snapshots: p.snapshots.filter(s => s.id !== id) }))
     void import('./sync.ts').then(m => m.deleteSnapshotCloud(id))
-    toast('Snapshot deleted', { undo: () => void update({ snapshots: prev }) })
+    toast('Snapshot deleted', { undo: () => void update(p => ({ snapshots: gone && !p.snapshots.some(s => s.id === id) ? [...p.snapshots, gone] : p.snapshots })) })
   }
   const sinceLast = snaps.length ? audit.riskShare - snaps[snaps.length - 1].riskShare : null
   return (
