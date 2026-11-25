@@ -81,11 +81,11 @@ function Pacing({ audit, pace, ds }: TabProps) {
             {f.buckets.length > 0 && (
               <div className="freq-chart" role="img" aria-label="Impressions by exposure count, with the share beyond the cap highlighted">
                 {f.buckets.map(b => (
-                  <div key={b.frequency} className="freq-col" title={`${b.frequency} exposures: ${fmtNum(b.users)} users, ${fmtNum(b.impressions)} impressions, ${fmtNum(b.beyond)} past the cap`}>
+                  <div key={`${b.frequency}${b.open ? '+' : ''}`} className="freq-col" title={`${b.frequency}${b.open ? ' or more' : ''} exposures: ${fmtNum(b.users)} users, ${fmtNum(b.impressions)} impressions, ${fmtNum(b.beyond)} past the cap`}>
                     <div className="freq-bar" style={{ height: `${(b.impressions / maxU) * 100}%` }}>
                       <span className="beyond" style={{ height: `${b.impressions ? (b.beyond / b.impressions) * 100 : 0}%` }} />
                     </div>
-                    <small>{b.frequency}</small>
+                    <small>{b.frequency}{b.open && '+'}</small>
                   </div>
                 ))}
               </div>

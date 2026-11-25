@@ -102,7 +102,7 @@ export default function Docs() {
         <h2>Flight plan and frequency report</h2>
         <p><b>Flight plan</b> (for pacing): one row per line item with its budget and inclusive start and end dates. Line item names must match the line item, ad group or campaign column in the placement report. Pacing needs the placement report broken out by day.</p>
         <Code code={FLIGHT} label="flight.csv" />
-        <p><b>Frequency report</b> (for waste): users or households by number of exposures. The Trade Desk, DV360 and most CTV platforms offer a frequency or reach-and-frequency report. Without one, the average frequency column per placement is used instead.</p>
+        <p><b>Frequency report</b> (for waste): users or households by number of exposures. A last bucket such as <code>10+</code> is read as 10 or more; give it impressions, or its users count as 10 each. The Trade Desk, DV360 and most CTV platforms offer a frequency or reach-and-frequency report. Without one, the average frequency column per placement is used instead.</p>
         <Code code={FREQ} label="frequency.csv" />
       </section>
 

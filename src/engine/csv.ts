@@ -437,7 +437,10 @@ export function validate(kind: Kind, csv: { rows: string[][]; lines: number[]; d
         obj[f.key] = dayOf(t)
         continue
       }
-      const n = parseNum(raw, marks.counts.has(f.key) && ambiguous(raw) ? bareNum(raw).includes('.') : marks.comma.get(f.key))
+      // "10+" is everyone from 10 exposures up.
+      const open = kind === 'freq' && f.key === 'frequency' && /^\s*\d+\s*\+\s*$/.test(raw)
+      if (open) obj.open = true
+      const n = open ? parseInt(raw, 10) : parseNum(raw, marks.counts.has(f.key) && ambiguous(raw) ? bareNum(raw).includes('.') : marks.comma.get(f.key))
       if (Number.isNaN(n)) {
         if (raw.trim() && !/^(--|-|null|n\/a|na)$/i.test(raw.trim())) { issues.push({ line, message: `${f.label} "${raw.slice(0, 40)}" is not a number` }); bad = true }
         else if (f.required) { issues.push({ line, message: `${f.label} is empty` }); bad = true }
@@ -447,6 +450,7 @@ export function validate(kind: Kind, csv: { rows: string[][]; lines: number[]; d
       obj[f.key] = f.type !== 'rate' ? n : points.has(f.key) && !raw.includes('%') ? n / 100 : asRate(n)
     }
     if (bad) { skipped++; continue }
+    if (obj.open && obj.impressions === undefined) issues.push({ line, message: `"${obj.frequency}+" has no impressions, so its users are counted at ${obj.frequency} each, the least they saw` })
     if (kind === 'placements') { obj.clicks ??= 0; obj.conversions ??= 0 }
     if (kind === 'flight' && String(obj.end) < String(obj.start)) { issues.push({ line, message: 'End date is before start date' }); skipped++; continue }
     if (kind === 'placements' && Number(obj.clicks) > Number(obj.impressions) && Number(obj.impressions) > 0) issues.push({ line, message: 'More clicks than impressions (kept; worth checking)' })
