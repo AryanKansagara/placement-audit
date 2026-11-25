@@ -214,7 +214,7 @@ function PlacementDetail({ p, audit, threshold, setOverride }: { p: Placement; a
 
 // ---------- Overview ----------
 
-function Overview({ project, audit, pace, openPlacement, onTab }: TabProps & { onTab(t: Tab): void }) {
+function Overview({ project, ds, audit, pace, openPlacement, onTab }: TabProps & { onTab(t: Tab): void }) {
   const [excluded, setExcluded] = useState(false)
   const t = audit.totals
   const w = audit.whatIf
@@ -228,7 +228,7 @@ function Overview({ project, audit, pace, openPlacement, onTab }: TabProps & { o
         <button type="button" className="kpi clickable bad" onClick={() => onTab('placements')}><span>Spend at risk</span><b>{fmtUsd(audit.spendAtRisk)}</b><small>{fmtPct(audit.riskShare, 1)} of spend on {audit.flagged.length} flagged placements</small></button>
         <div className="kpi good"><span>{roas ? 'ROAS' : 'CPA'} after exclusions</span><b>{roas ? fmtRoas(w.after.roas) : fmtCpa(w.after.cpa)}</b><small>from {roas ? fmtRoas(w.before.roas) : fmtCpa(w.before.cpa)} ({fmtPct(delta, 0)} {roas ? 'higher' : 'lower'})</small></div>
         <button type="button" className={`kpi clickable${audit.freq.share > 0.1 ? ' warn' : ''}`} onClick={() => onTab('pacing')}><span>Frequency waste</span><b>{audit.freq.source === 'none' ? '—' : fmtUsd(audit.freq.wastedSpend)}</b><small>{audit.freq.source === 'none' ? 'No frequency data in the report' : `${fmtPct(audit.freq.share, 1)} of impressions past a cap of ${audit.freq.cap}`}</small></button>
-        <button type="button" className={`kpi clickable${alerts.length ? ' warn' : ''}`} onClick={() => onTab('pacing')}><span>Pacing</span><b>{pace.length ? `${alerts.length} of ${pace.length}` : '—'}</b><small>{pace.length ? alerts.length ? 'line items off pace' : 'line items on pace' : 'Add a flight plan on the Data tab'}</small></button>
+        <button type="button" className={`kpi clickable${alerts.length ? ' warn' : ''}`} onClick={() => onTab('pacing')}><span>Pacing</span><b>{pace.length ? `${alerts.length} of ${pace.length}` : '—'}</b><small>{pace.length ? alerts.length ? 'line items off pace' : 'line items on pace' : ds.flight.length ? 'Needs a report broken out by day' : 'Add a flight plan on the Data tab'}</small></button>
       </div>
 
       <div className="panel">

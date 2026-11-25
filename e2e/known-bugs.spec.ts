@@ -84,13 +84,18 @@ test('#11 a campaign-level flight plan', async ({ page }) => {
   await expect(page.locator('.pace-card')).toContainText('Spent$600', { timeout: 3000 })
 })
 
-test.fail('#12 a report without dates has no pacing verdict', async ({ page }) => {
+test('#12 a report without dates has no pacing verdict', async ({ page }) => {
   await newAudit(page)
   await importFile(page, { name: 'f.csv', text: FLIGHT }, 1)
   await importFile(page, { name: 'd.csv', text: 'line item,domain,impressions,spend\nLine A,a.example,10000,600\n' }, 1)
+  await expect(kpi(page, 'Pacing')).toContainText('Needs a report broken out by day')
   await tab(page, 'Pacing')
   await expect(page.getByRole('heading', { name: 'Pacing by line item' })).toBeVisible()
   await expect(page.getByText('Under-pacing', { exact: true })).toHaveCount(0, { timeout: 3000 })
+  await expect(page.getByText('Pacing needs a report broken out by day')).toBeVisible()
+  await page.getByRole('link', { name: 'Client report', exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'What we are changing' })).toBeVisible()
+  await expect(page.locator('.report-actions')).not.toContainText('Adjust daily budgets')
 })
 
 test('#13 a small leaking placement is found in a long tail', async ({ page }) => {

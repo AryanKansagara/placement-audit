@@ -27,23 +27,27 @@ export interface LinePacing {
 
 /**
  * Even-pacing tracker. Expected spend to date = budget × elapsed / total days; under below 90%, over above 110%.
- * Rows are matched to a flight line by line item; when no row has that line item, by campaign. Rows without a date are ignored here.
+ * Rows are matched to a flight line by line item; when no row has that line item, by campaign. Rows without a date are ignored here;
+ * a flight line gets no pacing when nothing is dated, or when every row that matches it is undated.
  */
 export function pacing(flight: FlightLine[], rows: PlacementRow[], asOfOverride?: string): LinePacing[] {
   const dated = rows.filter(r => r.date)
+  if (!dated.length) return []
   const lastData = dated.reduce((m, r) => (r.date! > m ? r.date! : m), '')
-  return flight.map(f => {
+  return flight.flatMap(f => {
     const key = f.line.trim().toLowerCase()
     const is = (name?: string) => name?.trim().toLowerCase() === key
     const byLine = rows.some(r => is(r.line))
+    const mine = rows.filter(r => is(byLine ? r.line : r.campaign))
+    if (mine.length && !mine.some(r => r.date)) return []
     const daily = new Map<string, number>()
-    for (const r of dated) {
-      if (!is(byLine ? r.line : r.campaign)) continue
-      daily.set(r.date!, (daily.get(r.date!) ?? 0) + r.spend)
+    for (const r of mine) {
+      if (!r.date) continue
+      daily.set(r.date, (daily.get(r.date) ?? 0) + r.spend)
     }
     const s = dayNum(f.start), e = dayNum(f.end)
     const days = e - s + 1
-    const asOf = asOfOverride ?? (lastData || f.start)
+    const asOf = asOfOverride ?? lastData
     const a = Math.min(Math.max(dayNum(asOf), s - 1), e)
     const elapsed = Math.max(0, a - s + 1)
     let cum = 0
