@@ -206,6 +206,16 @@ test('pacing matches by campaign when there is no line item, and flags over-paci
   assert.equal(p.status, 'over')
 })
 
+test('pacing: a campaign-level line counts all its line items; a line item match wins and nothing counts twice', () => {
+  const day = (line: string | undefined, campaign: string, spend: number, d = 1): PlacementRow => ({ ...row('a.example', 100, spend), date: `2026-11-0${d}`, line, campaign })
+  const f = (line: string) => ({ line, budget: 3000, start: '2026-11-01', end: '2026-11-30' })
+  const rows = [day('L1', 'Camp', 10), day('L2', 'Camp', 20, 2), day('L3', 'Other', 40, 2), day(undefined, 'Camp', 5)]
+  assert.deepEqual(pacing([f(' camp '), f('L2'), f('Other'), f('nope')], rows).map(p => p.spent), [35, 20, 40, 0])
+  // "Brand" is a line item of one campaign and the name of another.
+  assert.equal(pacing([f('Brand')], [day('Brand', 'X', 10), day('L', 'Brand', 20)])[0].spent, 10)
+  assert.equal(pacing([f('Same')], [day('Same', 'Same', 10)])[0].spent, 10)
+})
+
 test('blocklists: DSP shapes for web and app placements', () => {
   const a = runAudit(ds([row('junk.example', 5000, 20), row('com.example.flash', 5000, 10), row('id1900000966', 5000, 5)], { knownMfa: ['junk.example', 'com.example.flash', 'id1900000966'] }), DEFAULT_CONFIG)
   assert.equal(blocklist(a.flagged, 'gads'), 'Placement\njunk.example\nmobileapp::2-com.example.flash\nmobileapp::1-1900000966\n')
