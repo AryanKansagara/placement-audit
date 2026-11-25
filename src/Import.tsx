@@ -4,13 +4,13 @@ import { normalize } from './engine/domain.ts'
 import { toExportCsv } from './engine/sample.ts'
 import { EMPTY_DATASET, type Dataset, type FlightLine, type FreqBucket, type PlacementRow } from './engine/types.ts'
 import { createBlankProject, logChange } from './projectData.ts'
-import { putData, saveProject, uuid, type Project } from './store.ts'
+import { getProject, updateData, updateProject, uuid, type ImportMeta, type Project } from './store.ts'
 import { RAW_SYNC_LIMIT, useSync } from './sync.ts'
 import { ask, download, Empty, go, Link, toast } from './ui.tsx'
 
 interface Pending { id: string; name: string; csv: ReturnType<typeof parseCsv>; header: number; kind: Kind | null; source: Source; map: Mapping }
 
-export default function DataTab({ project, ds, update, reload }: { project: Project; ds: Dataset | null; update(p: Partial<Project>): void; reload(): void }) {
+export default function DataTab({ project, ds, reload }: { project: Project; ds: Dataset | null; reload(): void }) {
   const data = ds ?? EMPTY_DATASET
   const [pending, setPending] = useState<Pending[]>([])
   const [drag, setDrag] = useState(false)
@@ -39,42 +39,49 @@ export default function DataTab({ project, ds, update, reload }: { project: Proj
   }
 
   /** Samples are read-only: importing into one starts a fresh audit. */
-  const target = async (): Promise<{ p: Project; base: Dataset; fresh: boolean }> => {
-    if (!project.sampleId) return { p: project, base: data, fresh: false }
-    return { p: await createBlankProject('My campaign audit'), base: EMPTY_DATASET, fresh: true }
+  const started = useRef<Promise<Project> | null>(null)
+  const target = async (): Promise<{ id: string; fresh: boolean }> => {
+    if (!project.sampleId) return { id: project.id, fresh: false }
+    return { id: (await (started.current ??= createBlankProject('My campaign audit'))).id, fresh: true }
   }
 
   const commit = async (pd: Pending, rows: unknown[], skipped: number) => {
     if (!pd.kind) return
-    const { p, base, fresh } = await target()
-    const merged: Dataset = pd.kind === 'placements' ? { ...base, rows: rows as PlacementRow[] }
+    const { id, fresh } = await target()
+    const before = await updateData(id, base => pd.kind === 'placements' ? { ...base, rows: rows as PlacementRow[] }
       : pd.kind === 'flight' ? { ...base, flight: [...base.flight.filter(f => !(rows as FlightLine[]).some(n => n.line.toLowerCase() === f.line.toLowerCase())), ...(rows as FlightLine[])] }
-        : { ...base, freq: rows as FreqBucket[] }
-    await putData(p.id, merged)
+        : { ...base, freq: rows as FreqBucket[] })
     const meta = { id: uuid(), kind: pd.kind, source: pd.kind === 'placements' ? pd.source : undefined, fileName: pd.name, rows: rows.length, skipped, at: Date.now() }
     setPending(x => x.filter(y => y.id !== pd.id))
     const msg = `Imported ${rows.length.toLocaleString()} ${KINDS[pd.kind].title.toLowerCase()} rows${skipped ? `, skipped ${skipped}` : ''}`
     if (fresh) {
-      await saveProject({ ...p, imports: [meta], changelog: [...p.changelog, { at: Date.now(), action: 'Imported', detail: `${pd.name}: ${rows.length} rows` }] })
+      await logChange(id, 'Imported', `${pd.name}: ${rows.length} rows`, p => ({ imports: [...p.imports, meta] }))
       toast(`${msg} into a new audit (samples are read-only).`, { tone: 'ok' })
-      go(`/app/p/${p.id}`)
+      go(`/app/p/${id}`)
       return
     }
-    const prev = { data, imports: project.imports }
-    await logChange(project.id, 'Imported', `${pd.name}: ${rows.length} ${KINDS[pd.kind].title.toLowerCase()} rows${pd.kind === 'placements' ? ` (${SOURCES[pd.source]})` : ''}`, { imports: [...project.imports, meta], dataMissing: false })
+    await logChange(id, 'Imported', `${pd.name}: ${rows.length} ${KINDS[pd.kind].title.toLowerCase()} rows${pd.kind === 'placements' ? ` (${SOURCES[pd.source]})` : ''}`, p => ({ imports: [...p.imports, meta], dataMissing: false }))
     reload()
-    toast(msg, { tone: 'ok', undo: pd.kind === 'placements' && data.rows.length ? () => void putData(project.id, prev.data).then(() => { update({ imports: prev.imports }); reload() }) : undefined })
+    const undo = async () => {
+      const imports = getProject(id)?.imports ?? []
+      const at = imports.findIndex(i => i.id === meta.id)
+      if (at < 0 || imports.slice(at + 1).some(i => i.kind === 'placements')) { toast('Not undone: the report has been replaced or cleared since.', { tone: 'error' }); return }
+      await updateData(id, d => ({ ...d, rows: before.rows }))
+      await updateProject(id, p => ({ imports: p.imports.filter(i => i.id !== meta.id) }))
+      reload()
+    }
+    toast(msg, { tone: 'ok', undo: pd.kind === 'placements' && before.rows.length ? () => void undo() : undefined })
     if (pd.kind === 'placements') go(`/app/p/${project.id}`)
   }
 
   const addList = async (text: string, name: string) => {
     const keys = [...new Set(parseList(text).map(v => normalize(v).key).filter(Boolean))]
     if (!keys.length) { toast('No domains or app IDs found in that list.', { tone: 'error' }); return }
-    const { p, base, fresh } = await target()
-    await putData(p.id, { ...base, knownMfa: [...new Set([...base.knownMfa, ...keys])] })
+    const { id, fresh } = await target()
+    await updateData(id, d => ({ ...d, knownMfa: [...new Set([...d.knownMfa, ...keys])] }))
     const meta = { id: uuid(), kind: 'mfa' as const, fileName: name, rows: keys.length, skipped: 0, at: Date.now() }
-    if (fresh) { await saveProject({ ...p, imports: [meta] }); go(`/app/p/${p.id}/data`) }
-    else { await logChange(p.id, 'Added known-MFA list', `${name}: ${keys.length} entries`, { imports: [...project.imports, meta] }); reload() }
+    if (fresh) { await updateProject(id, p => ({ imports: [...p.imports, meta] })); go(`/app/p/${id}/data`) }
+    else { await logChange(id, 'Added known-MFA list', `${name}: ${keys.length} entries`, p => ({ imports: [...p.imports, meta] })); reload() }
     setListText('')
     toast(`Added ${keys.length} entries to the known-MFA list`, { tone: 'ok' })
   }
@@ -130,7 +137,7 @@ export default function DataTab({ project, ds, update, reload }: { project: Proj
         <div className="row gap-sm wrap">
           <button type="button" className="btn primary sm" disabled={!listText.trim()} onClick={() => void addList(listText, 'Pasted list')}>Add to list</button>
           <label className="btn ghost sm">Upload list<input type="file" accept=".txt,.csv" hidden onChange={async e => { const f = e.target.files?.[0]; if (f) void addList(decodeBytes(await f.arrayBuffer()), f.name); e.target.value = '' }} /></label>
-          {data.knownMfa.length > 0 && !project.sampleId && <button type="button" className="btn danger-ghost sm" onClick={async () => { const prev = data; await putData(project.id, { ...data, knownMfa: [] }); void logChange(project.id, 'Cleared known-MFA list'); reload(); toast('Known-MFA list cleared', { undo: () => void putData(project.id, prev).then(reload) }) }}>Clear list ({data.knownMfa.length})</button>}
+          {data.knownMfa.length > 0 && !project.sampleId && <button type="button" className="btn danger-ghost sm" onClick={async () => { const prev = await updateData(project.id, d => ({ ...d, knownMfa: [] })); void logChange(project.id, 'Cleared known-MFA list'); reload(); toast('Known-MFA list cleared', { undo: () => void updateData(project.id, d => ({ ...d, knownMfa: [...new Set([...prev.knownMfa, ...d.knownMfa])] })).then(reload) }) }}>Clear list ({data.knownMfa.length})</button>}
         </div>
       </div>
 
@@ -141,12 +148,22 @@ export default function DataTab({ project, ds, update, reload }: { project: Proj
             <p className="small">Remove every imported row from this audit. Settings, overrides, snapshots and the change log stay.</p>
             <button type="button" className="btn danger-ghost sm" onClick={async () => {
               if (!(await ask('Clear imported data?', 'Removes all imported reports from this audit on this device. Snapshots and overrides are kept. You can undo for a few seconds.', 'Clear data'))) return
-              const before = data
-              const imports = project.imports
-              await putData(project.id, EMPTY_DATASET)
-              update({ imports: [] })
+              const before = await updateData(project.id, () => EMPTY_DATASET)
+              let imports: ImportMeta[] = []
+              await updateProject(project.id, p => { imports = p.imports; return { imports: [] } })
               reload()
-              toast('Imported data cleared', { undo: () => void putData(project.id, before).then(() => { update({ imports }); reload() }) })
+              // Anything imported since the clear stays; the rest comes back.
+              const restore = async () => {
+                await updateData(project.id, d => ({
+                  rows: d.rows.length ? d.rows : before.rows,
+                  flight: [...before.flight.filter(f => !d.flight.some(n => n.line.toLowerCase() === f.line.toLowerCase())), ...d.flight],
+                  freq: d.freq.length ? d.freq : before.freq,
+                  knownMfa: [...new Set([...before.knownMfa, ...d.knownMfa])],
+                }))
+                await updateProject(project.id, p => ({ imports: [...imports, ...p.imports] }))
+                reload()
+              }
+              toast('Imported data cleared', { undo: () => void restore() })
             }}>Clear imported data</button>
           </div>
         </div>

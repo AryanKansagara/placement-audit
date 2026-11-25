@@ -4,7 +4,7 @@ import { snapshotOf } from './engine/exports.ts'
 import { pacing } from './engine/pacing.ts'
 import { generate, SAMPLES, sampleConfig, sampleHistory } from './engine/sample.ts'
 import { EMPTY_DATASET, type Config, type Dataset } from './engine/types.ts'
-import { blankConfig, getData, getProject, getProjects, saveProject, useProjects, uuid, type LogEntry, type Project } from './store.ts'
+import { blankConfig, getData, getProjects, saveProject, updateProject, useProjects, uuid, type LogEntry, type Project } from './store.ts'
 
 const sampleCache = new Map<string, Dataset>()
 export function sampleDataset(id: string): Dataset | null {
@@ -43,12 +43,10 @@ export async function createBlankProject(name: string): Promise<Project> {
   return saveProject({ id: uuid(), name, createdAt: now, updatedAt: now, config: blankConfig(), snapshots: [], imports: [], changelog: [{ at: now, action: 'Audit created' }] })
 }
 
-/** Appends to a project's change log (reads the latest copy so concurrent updates are not lost). */
-export function logChange(id: string, action: string, detail?: string, patch: Partial<Project> = {}) {
-  const p = getProject(id)
-  if (!p) return
+/** Appends to a project's change log (starts from the latest copy so concurrent updates are not lost). */
+export function logChange(id: string, action: string, detail?: string, patch: Partial<Project> | ((p: Project) => Partial<Project>) = {}) {
   const entry: LogEntry = { at: Date.now(), action, ...(detail ? { detail } : {}) }
-  return saveProject({ ...p, ...patch, changelog: [...(p.changelog ?? []), entry].slice(-400) })
+  return updateProject(id, p => ({ ...(typeof patch === 'function' ? patch(p) : patch), changelog: [...(p.changelog ?? []), entry].slice(-400) }))
 }
 
 export function useProject(id: string) {
@@ -64,8 +62,8 @@ export function useProject(id: string) {
     void getData(project.id).then(d => { if (live) setDs(d ? { ...EMPTY_DATASET, ...d } : EMPTY_DATASET) })
     return () => { live = false }
   }, [project?.id, project?.sampleId, importsKey, version])
-  const update = (patch: Partial<Project>) => project && saveProject({ ...project, ...patch })
-  const setConfig = (patch: Partial<Config>) => project && saveProject({ ...project, config: { ...project.config, ...patch } })
+  const update = (patch: Partial<Project>) => updateProject(id, patch)
+  const setConfig = (patch: Partial<Config>) => updateProject(id, p => ({ config: { ...p.config, ...patch } }))
   return { loading: list === null || (project !== null && ds === null), project, ds, update, setConfig, reload: () => setVersion(v => v + 1) }
 }
 

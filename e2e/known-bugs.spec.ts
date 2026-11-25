@@ -1,6 +1,6 @@
 import { card, choose, DAILY, expect, fixture, FLIGHT, HAND, importFile, keys, kpi, newAudit, row, saved, tab, test } from './fixtures'
 
-// Each test states the correct behavior for a filed bug and is expected to fail until it is fixed.
+// Each test states the correct behavior for a filed bug; test.fail marks the ones not fixed yet.
 
 test('#2 a percentage-point column reads 0.8 as 0.8%', async ({ page }) => {
   await newAudit(page)
@@ -154,7 +154,7 @@ test.fail('#17 placeholders are not exported to a DSP list', async ({ page }) =>
   await expect(page.locator('.code pre')).not.toContainText('low volume inventory', { timeout: 3000 })
 })
 
-test.fail('#25 two imports in quick succession are both kept', async ({ page }) => {
+test('#25 two imports in quick succession are both kept', async ({ page }) => {
   await newAudit(page)
   await choose(page, { name: 'flight.csv', text: FLIGHT }, { name: 'f.csv', text: 'frequency,users\n2,100\n' })
   await expect(page.locator('.pending')).toHaveCount(2)
@@ -162,4 +162,53 @@ test.fail('#25 two imports in quick succession are both kept', async ({ page }) 
   await expect(page.locator('.pending')).toHaveCount(0)
   await expect(page.locator('.cov', { hasText: 'Frequency report' })).toContainText('1 buckets')
   await expect(page.locator('.cov', { hasText: 'Flight plan' })).toContainText('1 line items', { timeout: 3000 })
+  await expect(page.locator('tbody tr')).toHaveCount(2)
+  await page.reload()
+  await expect(page.locator('.cov', { hasText: 'Frequency report' })).toContainText('1 buckets')
+  await expect(page.locator('.cov', { hasText: 'Flight plan' })).toContainText('1 line items')
+  await expect(page.locator('tbody tr')).toHaveCount(2)
+})
+
+test('#25 a pasted and an uploaded list added together are both kept', async ({ page }) => {
+  await newAudit(page)
+  await page.getByLabel('Known-MFA list').fill('a.example')
+  await page.evaluate(() => {
+    const input = document.querySelector<HTMLInputElement>('label.btn input[type=file]')!
+    const files = new DataTransfer()
+    files.items.add(new File(['b.example\n'], 'l.txt'))
+    input.files = files.files
+    input.dispatchEvent(new Event('change', { bubbles: true }))
+    ;[...document.querySelectorAll('button')].find(b => b.textContent === 'Add to list')!.click()
+  })
+  await expect(page.locator('tbody tr')).toHaveCount(2)
+  await expect(page.locator('.cov', { hasText: 'Known-MFA list' })).toContainText('2 entries', { timeout: 3000 })
+})
+
+test('#25 two quick imports into a sample land in one new audit', async ({ page }) => {
+  await page.goto('/app?sample=northwind&tab=data')
+  await choose(page, { name: 'h.csv', text: HAND }, { name: 'flight.csv', text: FLIGHT })
+  await expect(page.locator('.pending')).toHaveCount(2)
+  await page.evaluate(() => document.querySelectorAll<HTMLButtonElement>('.pending .btn.primary').forEach(b => b.click()))
+  await expect(page.getByRole('heading', { name: 'My campaign audit' })).toBeVisible()
+  await expect(kpi(page, 'Spend audited')).toContainText('$800')
+  await tab(page, 'Data')
+  await expect(page.locator('.cov', { hasText: 'Flight plan' })).toContainText('1 line items')
+  await page.goto('/app')
+  await expect(page.getByRole('link', { name: 'My campaign audit' })).toHaveCount(1)
+})
+
+test('#25 undoing an import keeps what was added after it', async ({ page }) => {
+  await newAudit(page)
+  await importFile(page, { name: 'one.csv', text: HAND }, 7)
+  await tab(page, 'Data')
+  await importFile(page, { name: 'two.csv', text: 'domain,impressions,spend\nz.example,1000,5\n' }, 1)
+  await expect(kpi(page, 'Spend audited')).toContainText('$5')
+  await tab(page, 'Data')
+  await page.getByLabel('Known-MFA list').fill('a.example')
+  await page.getByRole('button', { name: 'Add to list' }).click()
+  await expect(page.locator('.cov', { hasText: 'Known-MFA list' })).toContainText('1 entries')
+  await page.locator('.toast', { hasText: 'Imported 1 ' }).getByRole('button', { name: 'Undo' }).click()
+  await expect(page.locator('.cov', { hasText: 'Placement report' })).toContainText('7 rows')
+  await expect(page.locator('.cov', { hasText: 'Known-MFA list' })).toContainText('1 entries')
+  await expect(page.locator('tbody tr')).toHaveCount(2)
 })

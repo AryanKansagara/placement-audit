@@ -143,7 +143,7 @@ export default function ProjectView({ id, tab: rawTab }: { id: string; tab: stri
 
       <Suspense fallback={<div className="boot" role="status"><span className="spinner" /> Loading</div>}>
         {effectiveTab === 'data' || !audit || !ds
-          ? <DataTab project={project} ds={ds} update={update} reload={reload} />
+          ? <DataTab key={project.id} project={project} ds={ds} reload={reload} />
           : (() => {
             const props: TabProps = { project, ds, audit, pace, update, setOverride, openPlacement: setDetail, saveSnapshot }
             if (effectiveTab === 'overview') return <Overview {...props} onTab={setTab} />
