@@ -130,7 +130,7 @@ export function dateOrders(fields: FieldSpec[], cells: Map<string, string[]>): M
 export function toCsv(rows: (string | number)[][]): string {
   return rows.map(r => r.map(v => {
     const s = typeof v === 'number' ? String(Math.round(v * 1e6) / 1e6) : v
-    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
+    return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
   }).join(',')).join('\n') + '\n'
 }
 

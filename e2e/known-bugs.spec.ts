@@ -1,6 +1,6 @@
 import { card, choose, DAILY, expect, fixture, FLIGHT, HAND, importFile, keys, kpi, newAudit, row, saved, tab, test } from './fixtures'
 
-// Each test states the correct behavior for a filed bug; test.fail marks the ones not fixed yet.
+// Each test states the correct behavior for a reported bug.
 
 test('#2 a percentage-point column reads 0.8 as 0.8%', async ({ page }) => {
   await newAudit(page)
@@ -245,7 +245,7 @@ test('#15 importing into a sample carries the waiting files to the new audit', a
   await expect(page.getByRole('link', { name: 'My campaign audit' })).toHaveCount(1)
 })
 
-test.fail('#16 the reasons CSV does not carry formulas', async ({ page }) => {
+test('#16 the reasons CSV does not carry formulas', async ({ page }) => {
   await newAudit(page)
   await importFile(page, { name: 'r.csv', text: 'domain,impressions,spend\n=1+1,1000,20\n' }, 1)
   await tab(page, 'Placements')
@@ -255,6 +255,7 @@ test.fail('#16 the reasons CSV does not carry formulas', async ({ page }) => {
   const f = await saved(page, () => page.getByRole('button', { name: 'Download', exact: true }).click())
   expect(f.text).toContain('1+1')
   expect(f.text).not.toMatch(/^=/m)
+  expect(f.text).toContain("\n'=1+1,web,100,20,1000,0,0,")
 })
 
 test('#17 placeholders are not exported to a DSP list', async ({ page }) => {
