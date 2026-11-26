@@ -46,7 +46,7 @@ test.fail('#6 campaigns and sites that start with "Total" are kept', async ({ pa
   await expect(card(page, 'r.csv').locator('.report')).toContainText('3 rows ready, 1 skipped', { timeout: 3000 })
 })
 
-test.fail('#7 a row with an unquoted thousands comma is refused', async ({ page }) => {
+test('#7 a row with an unquoted thousands comma is refused', async ({ page }) => {
   await newAudit(page)
   await choose(page, { name: 'r.csv', text: 'domain,impressions,spend\na.example,1000,10.00\nb.example,1,234,10.50\n' })
   await expect(card(page, 'r.csv').locator('.report')).toContainText('1 row ready, 1 skipped', { timeout: 3000 })

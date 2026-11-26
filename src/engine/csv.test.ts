@@ -80,3 +80,10 @@ test('rates: one viewability fraction above 1 does not turn the column into perc
   assert.deepEqual(col('domain,impressions,spend,viewability\na.example,10,1,0.71\nb.example,10,1,0.68\nc.example,10,1,1.02\n', 'viewability'), [0.71, 0.68, 0.0102])
   assert.deepEqual(col('domain,impressions,spend,viewability\na.example,10,1,71\nb.example,10,1,68\nc.example,10,1,0.5\n', 'viewability'), [0.71, 0.68, 0.005])
 })
+
+test('a row with more values than headers is refused; empty trailing cells are not', () => {
+  const v = read('domain,impressions,spend\na.example,1000,10.00,,\nb.example,1,234,10.50\nc.example,"1,234",10.50\n')
+  assert.deepEqual(v.rows.map(r => [r.placement, r.impressions, r.spend]), [['a.example', 1000, 10], ['c.example', 1234, 10.5]])
+  assert.equal(v.skipped, 1)
+  assert.deepEqual(v.issues, [{ line: 3, message: 'Row has 4 values for 3 columns, so it was not read. A number such as 1,234 may need quotes' }])
+})

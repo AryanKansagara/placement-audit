@@ -308,6 +308,7 @@ function columns(fields: FieldSpec[], rows: string[][], map: Mapping, header: nu
   for (const rec of rows.slice(header + 1)) {
     if (isFooter(rec, width)) break
     if (rec.length < width && rec === rows[rows.length - 1]) break // cut off: its last value may be incomplete
+    if (rec.slice(width).some(c => c.trim())) continue // shifted: not read below
     for (const f of fields) if (map[f.key] !== undefined) out.get(f.key)!.push(rec[map[f.key]] ?? '')
   }
   return out
@@ -350,6 +351,10 @@ export function validate(kind: Kind, csv: { rows: string[][]; lines: number[]; d
     // DV360 writes its grand total as a row with every dimension blank and only metrics filled.
     if (kind === 'placements' && !first.trim() && (r === csv.rows.length - 1 || isFooter(csv.rows[r + 1], width))) {
       skipped++; issues.push({ line, message: 'Totals row skipped (no placement, metrics only)' }); continue
+    }
+    // Values past the last header mean an unquoted separator (1,234) shifted the columns: none of them can be trusted.
+    if (rec.slice(width).some(c => c.trim())) {
+      skipped++; issues.push({ line, message: `Row has ${rec.length} values for ${width} columns, so it was not read. A number such as 1,234 may need quotes` }); continue
     }
     const obj: Record<string, unknown> = {}
     let bad = false
