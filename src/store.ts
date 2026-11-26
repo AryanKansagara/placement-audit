@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from 'react'
 import type { Snapshot } from './engine/exports.ts'
-import { DEFAULT_CONFIG, type Config, type Dataset } from './engine/types.ts'
+import { DEFAULT_CONFIG, EMPTY_DATASET, type Config, type Dataset } from './engine/types.ts'
 import type { Kind, Source } from './engine/csv.ts'
 
 export interface ImportMeta {
@@ -106,6 +106,31 @@ export async function saveProject(p: Project, opts: { touch?: boolean; silent?: 
   emit()
   if (!opts.silent) changeHooks.forEach(f => f(next))
   return next
+}
+
+// Read-modify-write steps run one after another, each from what the one before it stored.
+let queue: Promise<unknown> = Promise.resolve()
+function serial<T>(step: () => Promise<T>): Promise<T> {
+  const run = queue.then(step)
+  queue = run.catch(() => {})
+  return run
+}
+
+/** Changes a project starting from its current copy, not from the one on screen. */
+export function updateProject(id: string, change: Partial<Project> | ((p: Project) => Partial<Project>)): Promise<Project | undefined> {
+  return serial(async () => {
+    const p = getProject(id)
+    return p && saveProject({ ...p, ...(typeof change === 'function' ? change(p) : change) })
+  })
+}
+
+/** Changes a project's stored dataset; resolves to the dataset as it was before. */
+export function updateData(id: string, change: (d: Dataset) => Dataset): Promise<Dataset> {
+  return serial(async () => {
+    const before = { ...EMPTY_DATASET, ...await getData(id) }
+    await putData(id, change(before))
+    return before
+  })
 }
 
 /** Deletes locally; returns an undo function that restores the project and its data. */

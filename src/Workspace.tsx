@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { SAMPLES } from './engine/sample.ts'
 import { createBlankProject, createSampleProject } from './projectData.ts'
-import { deleteProject, saveProject, useProjects, type Project } from './store.ts'
+import { deleteProject, updateProject, useProjects, type Project } from './store.ts'
 import { useSync } from './sync.ts'
 import { ask, fmtPct, fmtUsd, go, Link, SyntheticBadge, toast } from './ui.tsx'
 
@@ -88,7 +88,7 @@ function ProjectCard({ p }: { p: Project }) {
     <article className="project-card">
       <div className="row between">
         {renaming ? (
-          <form onSubmit={e => { e.preventDefault(); const v = String(new FormData(e.currentTarget).get('n')).trim(); if (v) void saveProject({ ...p, name: v }); setRenaming(false) }}>
+          <form onSubmit={e => { e.preventDefault(); const v = String(new FormData(e.currentTarget).get('n')).trim(); if (v) void updateProject(p.id, { name: v }); setRenaming(false) }}>
             <input name="n" defaultValue={p.name} autoFocus aria-label="Project name" onBlur={e => e.currentTarget.form?.requestSubmit()} />
           </form>
         ) : <h3><Link href={`/app/p/${p.id}`}>{p.name}</Link></h3>}
