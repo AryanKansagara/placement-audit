@@ -32,7 +32,7 @@ test('#4 country suffixes are not placements', async ({ page }) => {
   expect(await keys(page)).toEqual(['junk.co.ke', 'news.co.ke'])
 })
 
-test.fail('#5 bundles that end like a domain stay apps; language subdomains stay sites', async ({ page }) => {
+test('#5 bundles that end like a domain stay apps; language subdomains stay sites', async ({ page }) => {
   await newAudit(page)
   await importFile(page, { name: 'r.csv', text: 'domain,impressions,spend\ncom.weather.app,1000,20\nnl.example.be,1000,10\n' }, 2)
   await tab(page, 'Placements')

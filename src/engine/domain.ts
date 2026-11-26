@@ -39,9 +39,29 @@ const MULTI = new Set([
   ...Object.entries(SECOND_LEVEL).flatMap(([l, ccs]) => ccs.split(' ').map(cc => `${l}.${cc}`)), ...SHARED,
 ])
 
-// Reverse-DNS app bundles start with these (com.example.game). Domains never do once the scheme is stripped.
-const BUNDLE_HEAD = /^(com|net|org|io|tv|air|de|fr|uk|jp|co|me|app|mobi|ru|br|in|es|it|nl|kr|cn)\.[a-z0-9_-]+\.[a-z0-9_.-]+$/i
-const TLDS_ONLY_IN_DOMAINS = /\.(com|net|org|io|tv|co|app|me|info|news|biz|us|uk|ca|au|de|fr|example)$/i
+// Reverse-DNS app bundles start with a reversed domain (com.example.game, br.com.example.app); a few use a TLD-like vendor prefix.
+const GENERIC_HEAD = new Set(['com', 'net', 'org'])
+const PREFIX_HEAD = new Set(['io', 'tv', 'air', 'me', 'app', 'mobi'])
+const COUNTRY_HEAD = new Set(['de', 'fr', 'uk', 'jp', 'co', 'ru', 'br', 'in', 'es', 'it', 'nl', 'kr', 'cn'])
+const DOMAIN_TLD = new Set(['com', 'net', 'org', 'io', 'tv', 'co', 'app', 'me', 'info', 'news', 'biz', 'example'])
+// Under a country head these endings mean a language subdomain (de.example.xyz), not a bundle.
+const NEW_TLD = new Set(['xyz', 'online', 'site', 'top', 'club', 'live', 'store', 'shop', 'fun', 'space', 'website', 'blog', 'world', 'today', 'cloud', 'dev', 'page', 'media', 'press', 'agency', 'network', 'mobi', 'pro', 'eu'])
+const COUNTRY_TLD = new Set(`ac ad ae af ag ai al am ao aq ar as at au aw ax az ba bb bd be bf bg bh bi bj bm bn bo br bs bt bv bw by bz ca cc cd cf cg ch ci ck cl cm cn co cr cu cv cw cx cy cz de dj dk dm do dz ec ee eg er es et eu fi fj fk fm fo fr ga gb gd ge gf gg gh gi gl gm gn gp gq gr gs gt gu gw gy hk hm hn hr ht hu id ie il im in io iq ir is it je jm jo jp ke kg kh ki km kn kp kr kw ky kz la lb lc li lk lr ls lt lu lv ly ma mc md me mg mh mk ml mm mn mo mp mq mr ms mt mu mv mw mx my mz na nc ne nf ng ni nl no np nr nu nz om pa pe pf pg ph pk pl pm pn pr ps pt pw py qa re ro rs ru rw sa sb sc sd se sg sh si sj sk sl sm sn so sr ss st su sv sx sy sz tc td tf tg th tj tk tl tm tn to tr tt tv tw tz ua ug uk us uy uz va vc ve vg vi vn vu wf ws ye yt zm zw`.split(' '))
+
+/** Reverse-DNS app bundle, as opposed to a host name. Both are dotted labels, so the first and last decide. */
+function isBundle(s: string): boolean {
+  if (!/^[a-z]+\.[a-z0-9_-]+\.[a-z0-9_.-]+$/.test(s)) return false
+  const parts = s.split('.')
+  const [head, second] = parts
+  const last = parts[parts.length - 1]
+  const hostEnd = MULTI.has(parts.slice(-2).join('.'))
+  if (GENERIC_HEAD.has(head)) return !['com', 'net', 'org', 'example'].includes(last) && !(hostEnd && ['uk', 'au', 'ca', 'us', 'fr'].includes(last))
+  if (last === 'com' || last === 'net' || last === 'org' || last === 'example' || hostEnd) return false
+  // br.com.example, uk.co.example, air.com.example: a reversed registrable domain.
+  if (parts.length >= 4 && (MULTI.has(`${second}.${head}`) || (head === 'air' && GENERIC_HEAD.has(second)))) return true
+  if (DOMAIN_TLD.has(last) || COUNTRY_TLD.has(last)) return false
+  return PREFIX_HEAD.has(head) || (COUNTRY_HEAD.has(head) && !NEW_TLD.has(last))
+}
 
 export interface Normalized {
   /** Stable key used for grouping and for exclusion lists. */
@@ -77,7 +97,7 @@ export function normalize(raw: string): Normalized {
   if (play) return { key: play[1], kind: 'app', store: 'android' }
   const apple = s.match(/apps\.apple\.com\/.*\/id(\d+)/)
   if (apple) return { key: 'id' + apple[1], kind: 'app', store: 'ios' }
-  if (!s.includes('/') && BUNDLE_HEAD.test(s) && !TLDS_ONLY_IN_DOMAINS.test(s)) return { key: s, kind: 'app', store: 'android' }
+  if (isBundle(s)) return { key: s, kind: 'app', store: 'android' }
   // Web: strip scheme, credentials, path, port, trailing dot
   s = s.replace(/^[a-z][a-z0-9+.-]*:\/\//, '').replace(/^[^@/]*@/, '').split(/[/?#]/)[0].replace(/:\d+$/, '').replace(/\.$/, '')
   if (/^\d{1,3}(\.\d{1,3}){3}$/.test(s)) return { key: s, kind: 'web' }
