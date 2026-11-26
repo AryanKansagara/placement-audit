@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import { SIGNALS } from './engine/audit.ts'
+import { listable } from './engine/exports.ts'
 import { logChange, useAudit, useProject } from './projectData.ts'
 import { fmtCpa, fmtNum, fmtRoas, KIND_LABEL } from './Project.tsx'
 import { Treemap } from './Treemap.tsx'
@@ -14,6 +15,8 @@ export default function Report({ id }: { id: string }) {
   const t = audit.totals, w = audit.whatIf
   const roas = project.config.goal === 'roas'
   const off = pace.filter(p => p.status === 'under' || p.status === 'over')
+  const blocked = audit.flagged.filter(listable).length
+  const unlisted = audit.flagged.length - blocked
   const today = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
   return (
     <div className="report-page">
@@ -74,7 +77,8 @@ export default function Report({ id }: { id: string }) {
         <section className="avoid-break">
           <h2>What we are changing</h2>
           <ol className="report-actions">
-            <li>Block the {audit.flagged.length} flagged placements on every line item (list attached).</li>
+            <li>Block the {blocked} flagged placements on every line item (list attached).</li>
+            {unlisted > 0 && <li>Review {unlisted} flagged {unlisted === 1 ? 'entry that is' : 'entries that are'} a name rather than a domain or app ID, which a block list cannot match.</li>}
             {audit.freq.share > 0.05 && <li>Cap frequency at {audit.freq.cap} exposures per person.</li>}
             {off.length > 0 && <li>Adjust daily budgets on {off.map(l => l.line).join(', ')}.</li>}
             <li>Re-run this audit next week and confirm the blocked placements no longer receive spend.</li>

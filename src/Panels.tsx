@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { allowlist, blocklist, compare, FORMATS, type ListFormat } from './engine/exports.ts'
+import { allowlist, blocklist, compare, FORMATS, listable, type ListFormat } from './engine/exports.ts'
 import type { LinePacing } from './engine/pacing.ts'
 import { logChange } from './projectData.ts'
 import { fmtCpa, fmtNum, type Tab, type TabProps } from './Project.tsx'
@@ -102,10 +102,13 @@ function Exclusions({ project, audit }: TabProps) {
   const [format, setFormat] = useState<ListFormat>('stackadapt')
   const [scope, setScope] = useState<'all' | 'web' | 'app'>('all')
   const list = useMemo(() => audit.flagged.filter(p => scope === 'all' || (scope === 'web' ? p.kind === 'web' : p.kind !== 'web')), [audit, scope])
+  const uploads = list.filter(listable)
+  const names = list.filter(p => !listable(p))
+  const entries = format === 'reasons' ? list : uploads
   const date = new Date().toISOString().slice(0, 10)
-  const header = `${project.name} exclusions, ${date}\n${list.length} placements, ${fmtUsd(list.reduce((a, p) => a + p.spend, 0))} spend, threshold ${project.config.threshold}`
+  const header = `${project.name} exclusions, ${date}\n${uploads.length} placements, ${fmtUsd(uploads.reduce((a, p) => a + p.spend, 0))} spend, threshold ${project.config.threshold}`
   const text = blocklist(list, format, header)
-  const allow = useMemo(() => allowlist(audit), [audit])
+  const allow = useMemo(() => allowlist(audit).filter(listable), [audit])
   const fileBase = project.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
   const save = (name: string, body: string, what: string) => { download(name, body, name.endsWith('.csv') ? 'text/csv' : 'text/plain'); void logChange(project.id, what, `${name} (${body.trim().split('\n').length} lines)`) }
   return (
@@ -125,9 +128,10 @@ function Exclusions({ project, audit }: TabProps) {
           ))}
         </div>
         <p className="small format-note"><b>{FORMATS[format].label}:</b> {FORMATS[format].note} <span className="muted">Shapes checked November 2026; confirm in the upload dialog, since platforms change these.</span></p>
+        {names.length > 0 && <p className="small warn-text names-note"><b>{names.length} flagged {names.length === 1 ? 'entry is' : 'entries are'} not in the upload lists</b> ({names.slice(0, 3).map(p => p.key).join(', ')}{names.length > 3 ? ', …' : ''}; {fmtUsd(names.reduce((a, p) => a + p.spend, 0))}): not a domain or app ID, so no DSP can match {names.length === 1 ? 'it' : 'them'}. The reasons CSV keeps {names.length === 1 ? 'it' : 'them'}.</p>}
         <div className="code">
           <div className="code-head"><span>{`${fileBase}-exclusions-${format}.${FORMATS[format].ext}`}</span>
-            <div className="row gap-sm"><CopyButton text={text} /><button type="button" className="btn primary sm" disabled={!list.length} onClick={() => save(`${fileBase}-exclusions-${format}-${date}.${FORMATS[format].ext}`, text, `Exported ${FORMATS[format].label} exclusion list`)}>Download</button></div>
+            <div className="row gap-sm"><CopyButton text={text} /><button type="button" className="btn primary sm" disabled={!entries.length} onClick={() => save(`${fileBase}-exclusions-${format}-${date}.${FORMATS[format].ext}`, text, `Exported ${FORMATS[format].label} exclusion list`)}>Download</button></div>
           </div>
           <pre><code>{text.split('\n').slice(0, 40).join('\n')}{text.split('\n').length > 40 ? `\n… ${text.split('\n').length - 40} more lines` : ''}</code></pre>
         </div>

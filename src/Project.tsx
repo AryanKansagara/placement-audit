@@ -4,7 +4,7 @@ import type { LinePacing } from './engine/pacing.ts'
 import type { Dataset, Override } from './engine/types.ts'
 import { logChange, useAudit, useProject } from './projectData.ts'
 import { uuid, type Project } from './store.ts'
-import { snapshotOf } from './engine/exports.ts'
+import { listable, snapshotOf } from './engine/exports.ts'
 import { Treemap } from './Treemap.tsx'
 import { fmtPct, fmtUsd, go, isTyping, Link, Modal, SyntheticBadge, toast } from './ui.tsx'
 
@@ -279,7 +279,7 @@ function Overview({ project, audit, pace, openPlacement, onTab }: TabProps & { o
           </div>
           <h3 className="h4">Next steps</h3>
           <ul className="next-steps">
-            <li><Link href={`/app/p/${project.id}/exclusions`}>Download the exclusion list</Link> for your DSP ({audit.flagged.length} entries).</li>
+            <li><Link href={`/app/p/${project.id}/exclusions`}>Download the exclusion list</Link> for your DSP ({audit.flagged.filter(listable).length} entries).</li>
             <li><Link href={`/app/p/${project.id}/report`}>Print the client report</Link> with the evidence for each flag.</li>
             <li>Save a snapshot now, re-import next week, and compare on the History tab.</li>
           </ul>
