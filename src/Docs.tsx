@@ -88,7 +88,7 @@ export default function Docs() {
 
       <section id="generic">
         <h2>Any other DSP or a spreadsheet</h2>
-        <p>Any CSV (comma, tab or semicolon) with a placement column, impressions and spend works. Everything else is optional and improves the score. Rates may be written as 0.71, 71 or 71%. Currency symbols and thousands separators are fine, and so are European numbers (1.234,50): the importer decides the decimal mark from the file’s own values, and notes it when they contradict each other. App placements labelled “App name (com.bundle.id)” are grouped by the bundle.</p>
+        <p>Any CSV (comma, tab or semicolon) with a placement column, impressions and spend works. Everything else is optional and improves the score. Rates may be written as 0.71, 71 or 71%, the same way throughout a column (in a column that reaches 31.5, 0.8 means 0.8%). Currency symbols and thousands separators are fine, and so are European numbers (1.234,50): the importer decides the decimal mark from the file’s own values, and notes it when they contradict each other. App placements labelled “App name (com.bundle.id)” are grouped by the bundle.</p>
         <div className="table-wrap">
           <table className="data">
             <thead><tr><th>Field</th><th>Required</th><th>Header names recognised</th></tr></thead>

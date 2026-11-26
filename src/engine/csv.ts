@@ -180,6 +180,17 @@ export function decimalMarks(fields: FieldSpec[], cells: Map<string, string[]>, 
 /** Rates may arrive as 0.45, 45 or 45%. Anything above 1 is read as a percentage. */
 export const asRate = (n: number) => (n > 1 ? n / 100 : n)
 
+/**
+ * Whether a rate column without % signs is in percentage points (0.8, 31.5) rather than fractions (0.008, 0.315).
+ * An IVT fraction cannot pass 1, so one value above 1 is enough. Viewability can (1.02 from a measurement glitch)
+ * but is rarely under 1%, so at least half of its non-zero values must be above 1.
+ */
+export function isPercentColumn(key: string, values: number[]): boolean {
+  const nonZero = values.filter(v => v > 0)
+  const above = nonZero.filter(v => v > 1).length
+  return above > 0 && (key === 'ivt' || above * 2 >= nonZero.length)
+}
+
 export type Kind = 'placements' | 'flight' | 'freq'
 export type Source = 'stackadapt' | 'ttd' | 'dv360' | 'gads' | 'generic'
 type FieldType = 'day' | 'num' | 'rate' | 'str'
@@ -313,8 +324,17 @@ export function validate(kind: Kind, csv: { rows: string[][]; lines: number[]; d
   const total = csv.rows.length - header - 1
   for (const f of fields) if (f.required && !(f.key in map)) issues.push({ line: csv.lines[header] ?? 1, message: `Required column "${f.label}" is not mapped` })
   if (issues.length) return { rows: [], issues, skipped: total, total }
-  const marks = decimalMarks(fields, columns(fields, csv.rows, map, header), csv.delim)
+  const cells = columns(fields, csv.rows, map, header)
+  const marks = decimalMarks(fields, cells, csv.delim)
   for (const message of marks.notes) issues.push({ line: csv.lines[header] ?? 1, message })
+  const points = new Set<string>()
+  for (const f of fields) if (f.type === 'rate') {
+    const bare = (cells.get(f.key) ?? []).filter(c => !c.includes('%')).map(c => parseNum(c, marks.comma.get(f.key))).filter(n => !Number.isNaN(n))
+    if (!isPercentColumn(f.key, bare)) continue
+    points.add(f.key)
+    const small = bare.find(n => n > 0 && n <= 1)
+    if (small !== undefined) issues.push({ line: csv.lines[header] ?? 1, message: `${f.label}: values without a % sign go up to ${bare.reduce((a, b) => Math.max(a, b), 0)}, so the column was read as percentages (${small} is ${small}%)` })
+  }
   const width = csv.rows[header]?.length ?? 0
   for (let r = header + 1; r < csv.rows.length; r++) {
     const rec = csv.rows[r]
@@ -359,7 +379,7 @@ export function validate(kind: Kind, csv: { rows: string[][]; lines: number[]; d
         continue
       }
       if (n < 0) { issues.push({ line, message: `${f.label} is negative (${n})` }); bad = true; continue }
-      obj[f.key] = f.type === 'rate' ? asRate(n) : n
+      obj[f.key] = f.type !== 'rate' ? n : points.has(f.key) && !raw.includes('%') ? n / 100 : asRate(n)
     }
     if (bad) { skipped++; continue }
     if (kind === 'placements') { obj.clicks ??= 0; obj.conversions ??= 0 }

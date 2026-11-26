@@ -61,3 +61,22 @@ test('decimal mark: a cut-off or stray value does not change the other rows', ()
     assert.deepEqual(v.rows.slice(0, 2).map(r => [r.impressions, r.spend]), [[1234, 2345], [3456, 5678]], tail)
   }
 })
+
+test('rates: a column in percentage points keeps its small values small', () => {
+  const t = 'domain,impressions,spend,ivt\na.example,10,1,0.8\nb.example,10,1,31.5\nc.example,10,1,0.5%\nd.example,10,1,1\ne.example,10,1,0\n'
+  assert.deepEqual(col(t, 'ivt'), [0.008, 0.315, 0.005, 0.01, 0])
+  assert.match(read(t).issues[0].message, /IVT rate: values without a % sign go up to 31.5, so the column was read as percentages \(0.8 is 0.8%\)/)
+  assert.deepEqual(col('domain,impressions,spend,ivt\na.example,10,1,"0,8"\nb.example,10,1,"31,5"\n', 'ivt'), [0.008, 0.315])
+})
+
+test('rates: fractions and % values stay what they were', () => {
+  const t = 'domain,impressions,spend,ivt,viewability\na.example,10,1,0.8,0.71\nb.example,10,1,31.5%,0.9\nc.example,10,1,1,1\n'
+  assert.deepEqual(col(t, 'ivt'), [0.8, 0.315, 1])
+  assert.deepEqual(col(t, 'viewability'), [0.71, 0.9, 1])
+  assert.deepEqual(read(t).issues, [])
+})
+
+test('rates: one viewability fraction above 1 does not turn the column into percentages', () => {
+  assert.deepEqual(col('domain,impressions,spend,viewability\na.example,10,1,0.71\nb.example,10,1,0.68\nc.example,10,1,1.02\n', 'viewability'), [0.71, 0.68, 0.0102])
+  assert.deepEqual(col('domain,impressions,spend,viewability\na.example,10,1,71\nb.example,10,1,68\nc.example,10,1,0.5\n', 'viewability'), [0.71, 0.68, 0.005])
+})
